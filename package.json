@@ -17,11 +17,10 @@
     "http-server": "^14.1.1",
     "requirejs": "^2.3.7",
     "ts-loader": "^9.5.1",
+    "ts-shader-loader": "^2.0.2",
     "typescript": "^5.7.2",
     "webpack": "^5.97.1",
+    "@webgpu/types": "^0.1.51",
     "webpack-cli": "^5.1.4"
-  },
-  "devDependencies": {
-    "@webgpu/types": "^0.1.51"
   }
 }
