@@ -4,7 +4,7 @@
   "mode" : "production",
   "main": "index.js",
   "scripts": {
-    "start": "npm run install-missing-dependencies && npm run build && npm run serve",
+    "start": "npm install -g webpack-cli && npm run install-missing-dependencies && npm run build && npm run serve",
     "install-missing-dependencies": "npm i -g",
     "build": "webpack --config webpack.config.js",
     "serve": "http-server"
