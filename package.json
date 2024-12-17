@@ -1,27 +1,32 @@
 {
-  "name": "webgpu-tutorial",
+  "name": "npm-test",
   "version": "1.0.0",
-  "mode" : "production",
+  "description": "",
   "main": "index.js",
   "scripts": {
-    "start": "npm install -g webpack-cli && npm run install-missing-dependencies && npm run build && npm run serve",
-    "install-missing-dependencies": "npm i -g",
+    "start": "npm run install-missing-dependencies && npm run build && npm run serve",
+    "install-missing-dependencies": "npm i",
     "build": "webpack --config webpack.config.js",
-    "serve": "http-server"
+    "serve": "live-server --cors"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
-  "description": "",
   "dependencies": {
-    "@types/node": "^22.10.2",
-    "http-server": "^14.1.1",
-    "requirejs": "^2.3.7",
-    "ts-loader": "^9.5.1",
-    "ts-shader-loader": "^2.0.2",
-    "typescript": "^5.7.2",
-    "webpack": "^5.97.1",
-    "@webgpu/types": "^0.1.51",
-    "webpack-cli": "^5.1.4"
+    "@webgpu/types": "*",
+    "gl-matrix": "*",
+    "live-server": "*",
+    "jquery": "*",
+    "node": "*",
+    "ts-loader": "*",
+    "ts-shader-loader": "*",
+    "typescript": "*",
+    "util": "*",
+    "webpack": "*",
+    "webpack-cli": "*"
+  },
+  "devDependencies": {
+    "@types/jquery": "*",
+    "@types/node": "*"
   }
 }
