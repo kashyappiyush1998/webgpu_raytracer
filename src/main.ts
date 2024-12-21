@@ -6,7 +6,8 @@ const change_every_frame : HTMLPreElement = <HTMLPreElement> document.getElement
 const change_every_second : HTMLPreElement = <HTMLPreElement> document.getElementById("change-every-second");
 
 const scene: Scene = new Scene(1024);
+await scene.make_scene();
 
 const renderer = new Renderer(canvas, change_every_frame, change_every_second, scene);
 
-renderer.Initialize();
+await renderer.Initialize();

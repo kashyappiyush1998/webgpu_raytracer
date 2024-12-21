@@ -6,9 +6,12 @@ export class Triangle {
     color: vec3
     centroid: vec3
 
+    constructor() {
+        this.corners = [];
+    }
+
     build_from_center_and_offsets(center: vec3, offsets: vec3[], color: vec3) {
 
-        this.corners = []
         this.centroid = [0, 0, 0]
         const weight: vec3 = [0.33333, 0.33333, 0.33333]
 
@@ -34,5 +37,13 @@ export class Triangle {
         )
 
         this.color = color;
+    }
+
+    make_centroid() {
+        this.centroid = [
+            (this.corners[0][0] + this.corners[1][0] + this.corners[2][0]) / 3,
+            (this.corners[0][1] + this.corners[1][1] + this.corners[2][1]) / 3,
+            (this.corners[0][2] + this.corners[1][2] + this.corners[2][2]) / 3
+        ]
     }
 }

@@ -3,6 +3,7 @@ import { Triangle } from "./triangle";
 import { Camera } from "./camera";
 import { Node } from "./node";
 import { vec3 } from "gl-matrix";
+import { ObjMesh } from "./obj_mesh";
 
 export class Scene{
 
@@ -12,53 +13,36 @@ export class Scene{
     nodes: Node[];
     nodesUsed: number = 0;
     triangleIndices: number[];
+    statue: ObjMesh;
 
     constructor(triangleCount: number) {
-        this.triangleCount = triangleCount;
-        this.triangles = new Array(triangleCount);
-        for(let i = 0; i < this.triangles.length; i++){
 
-            const center: vec3 = [
-                -50 + 100.0 * Math.random(),
-                -50.0 + 100.0 * Math.random(),
-                -50.0 + 100.0 * Math.random()
-            ];
+        //Make objMesh
+        this.statue = new ObjMesh();
 
-            const offsets: vec3[] = 
-            [
-                [
-                    -3 + 6 * Math.random(),
-                    -3 + 6 * Math.random(),
-                    -3 + 6 * Math.random()
-                ],
-                [
-                    -3 + 6 * Math.random(),
-                    -3 + 6 * Math.random(),
-                    -3 + 6 * Math.random()
-                ],
-                [
-                    -3 + 6 * Math.random(),
-                    -3 + 6 * Math.random(),
-                    -3 + 6 * Math.random()
-                ]
-            ];
-
-            const color: vec3 = [
-                0.3 + 0.7 * Math.random(),
-                0.3 + 0.7 * Math.random(),
-                0.3 + 0.7 * Math.random()
-            ];
-
-            this.triangles[i] = new Triangle();
-            this.triangles[i].build_from_center_and_offsets(center, offsets, color);
-        }
-
-        this.camera = new Camera([-20.0, 0.0, 0.0]);
-        this.buildBVH();
-        
+        this.camera = new Camera([-5.0, 0.0, 0.0]);        
     }
 
-    buildBVH() {
+    async make_scene() {
+        this.statue = new ObjMesh();
+
+        await this.statue.initialize([1.0, 1.0, 1.0], "dist/models/statue.obj");
+
+        //TODO: get the triangle data from the loaded model and put
+        //it into the triangle list
+        this.triangles = [];
+        this.statue.triangles.forEach(
+            (tri) => {
+                this.triangles.push(tri);
+            }
+        )
+
+        this.triangleCount = this.triangles.length;
+
+        await this.buildBVH();
+    }
+
+    async buildBVH() {
         this.triangleIndices = new Array(this.triangles.length);
 
         for(var i: number = 0; i < this.triangles.length; i++) {
