@@ -4,15 +4,22 @@ struct Sphere {
     radius: f32,
 }
 
+struct Triangle {
+    corner_a: vec3<f32>,
+    corner_b: vec3<f32>,
+    corner_c: vec3<f32>,
+    color: vec3<f32>,
+}
+
 struct ObjectData {
-    spheres: array<Sphere>,
+    triangles: array<Triangle>,
 }
 
 struct Node {
     minCorner: vec3<f32>,
     leftChild: f32,
     maxCorner: vec3<f32>,
-    sphereCount: f32,
+    primitiveCount: f32,
 }
 
 struct BVH {
@@ -20,7 +27,7 @@ struct BVH {
 }
 
 struct ObjectIndices {
-    sphereIndices: array<f32>,
+    primitiveIndices: array<f32>,
 }
 
 struct Ray {
@@ -49,7 +56,7 @@ struct RenderState {
 @group(0) @binding(1) var<uniform> scene: SceneData;
 @group(0) @binding(2) var<storage, read> objects: ObjectData;
 @group(0) @binding(3) var<storage, read> tree: BVH;
-@group(0) @binding(4) var<storage, read> sphereLookup: ObjectIndices;
+@group(0) @binding(4) var<storage, read> triangleLookup: ObjectIndices;
 @group(0) @binding(5) var skyMaterial: texture_cube<f32>;
 @group(0) @binding(6) var skySampler: sampler;
 
@@ -121,10 +128,10 @@ fn trace(ray: Ray) -> RenderState {
 
     while(true) {
 
-        var sphereCount: u32 = u32(node.sphereCount);
+        var primitiveCount: u32 = u32(node.primitiveCount);
         var contents: u32 = u32(node.leftChild);
 
-        if(sphereCount == 0){
+        if(primitiveCount == 0){
 
             var child1: Node = tree.nodes[contents];
             var child2: Node = tree.nodes[contents + 1];
@@ -161,8 +168,8 @@ fn trace(ray: Ray) -> RenderState {
         }
         else{
 
-            for(var i: u32 = 0; i < sphereCount; i++) {
-                var newRenderState : RenderState = hit_sphere(ray, objects.spheres[u32(sphereLookup.sphereIndices[i + contents])], 0.001, nearestHit, renderState);
+            for(var i: u32 = 0; i < primitiveCount; i++) {
+                var newRenderState : RenderState = hit_triangle(ray, objects.triangles[u32(triangleLookup.primitiveIndices[i + contents])], 0.001, nearestHit, renderState);
 
                 if(newRenderState.hit){
                     nearestHit = newRenderState.t;
@@ -213,6 +220,81 @@ fn hit_sphere(ray: Ray, sphere: Sphere, tMin: f32, tMax: f32, oldRenderState: Re
     }
 
     renderState.hit = false;
+    return renderState;
+}
+
+fn hit_triangle(ray: Ray, tri: Triangle, tMin: f32, tMax: f32, oldRenderState: RenderState) -> RenderState {
+    
+    //Set up a blank renderstate,
+    //right now this hasn't hit anything
+    var renderState: RenderState;
+    renderState.color = oldRenderState.color;
+    renderState.hit = false;
+
+    //Direction vectors
+    let edge_ab: vec3<f32> = tri.corner_b - tri.corner_a;
+    let edge_ac: vec3<f32> = tri.corner_c - tri.corner_a;
+    //Normal of the triangle
+    var n: vec3<f32> = normalize(cross(edge_ab, edge_ac));
+    var ray_dot_tri: f32 = dot(ray.direction, n);
+    //backface reversal
+    if (ray_dot_tri > 0.0) {
+        ray_dot_tri = ray_dot_tri * -1;
+        n = n * -1;
+    }
+    //early exit, ray parallel with triangle surface
+    if (abs(ray_dot_tri) < 0.00001) {
+        return renderState;
+    }
+
+    var system_matrix: mat3x3<f32> = mat3x3<f32>(
+        ray.direction,
+        tri.corner_a - tri.corner_b,
+        tri.corner_a - tri.corner_c
+    );
+    let denominator: f32 = determinant(system_matrix);
+    if (abs(denominator) < 0.00001) {
+        return renderState;
+    }
+
+    system_matrix = mat3x3<f32>(
+        ray.direction,
+        tri.corner_a - ray.origin,
+        tri.corner_a - tri.corner_c
+    );
+    let u: f32 = determinant(system_matrix) / denominator;
+    
+    if (u < 0.0 || u > 1.0) {
+        return renderState;
+    }
+
+    system_matrix = mat3x3<f32>(
+        ray.direction,
+        tri.corner_a - tri.corner_b,
+        tri.corner_a - ray.origin,
+    );
+    let v: f32 = determinant(system_matrix) / denominator;
+    if (v < 0.0 || u + v > 1.0) {
+        return renderState;
+    }
+
+    system_matrix = mat3x3<f32>(
+        tri.corner_a - ray.origin,
+        tri.corner_a - tri.corner_b,
+        tri.corner_a - tri.corner_c
+    );
+    let t: f32 = determinant(system_matrix) / denominator;
+
+    if (t > tMin && t < tMax) {
+
+        renderState.position = ray.origin + t * ray.direction;
+        renderState.normal = n;
+        renderState.color = tri.color;
+        renderState.t = t;
+        renderState.hit = true;
+        return renderState;
+    }
+
     return renderState;
 }
 

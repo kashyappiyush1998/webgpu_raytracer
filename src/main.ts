@@ -5,7 +5,7 @@ const canvas : HTMLCanvasElement = <HTMLCanvasElement> document.getElementById("
 const change_every_frame : HTMLPreElement = <HTMLPreElement> document.getElementById("change-every-frame");
 const change_every_second : HTMLPreElement = <HTMLPreElement> document.getElementById("change-every-second");
 
-const scene: Scene = new Scene();
+const scene: Scene = new Scene(1024);
 
 const renderer = new Renderer(canvas, change_every_frame, change_every_second, scene);
 

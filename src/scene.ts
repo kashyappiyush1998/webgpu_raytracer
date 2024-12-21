@@ -1,55 +1,78 @@
 import { Sphere } from "./sphere";
+import { Triangle } from "./triangle";
 import { Camera } from "./camera";
 import { Node } from "./node";
 import { vec3 } from "gl-matrix";
 
 export class Scene{
 
-    spheres: Sphere[];
+    triangles: Triangle[];
     camera: Camera;
-    sphereCount: number;
+    triangleCount: number;
     nodes: Node[];
     nodesUsed: number = 0;
-    sphereIndices: number[];
+    triangleIndices: number[];
 
-    constructor() {
-        this.spheres = new Array(1024);
-        for(let i = 0; i < this.spheres.length; i++){
+    constructor(triangleCount: number) {
+        this.triangleCount = triangleCount;
+        this.triangles = new Array(triangleCount);
+        for(let i = 0; i < this.triangles.length; i++){
 
-            const center: number[] = [
-                -50.0 + 100.0 * Math.random(),
+            const center: vec3 = [
+                -50 + 100.0 * Math.random(),
                 -50.0 + 100.0 * Math.random(),
                 -50.0 + 100.0 * Math.random()
-            ]
+            ];
 
-            const radius: number = 0.1 + 1.9 * Math.random();
+            const offsets: vec3[] = 
+            [
+                [
+                    -3 + 6 * Math.random(),
+                    -3 + 6 * Math.random(),
+                    -3 + 6 * Math.random()
+                ],
+                [
+                    -3 + 6 * Math.random(),
+                    -3 + 6 * Math.random(),
+                    -3 + 6 * Math.random()
+                ],
+                [
+                    -3 + 6 * Math.random(),
+                    -3 + 6 * Math.random(),
+                    -3 + 6 * Math.random()
+                ]
+            ];
 
-            const color: number[] = [
+            const color: vec3 = [
                 0.3 + 0.7 * Math.random(),
                 0.3 + 0.7 * Math.random(),
                 0.3 + 0.7 * Math.random()
-            ]
+            ];
 
-            this.spheres[i] = new Sphere(center, radius, color);
+            this.triangles[i] = new Triangle();
+            this.triangles[i].build_from_center_and_offsets(center, offsets, color);
         }
-        this.sphereCount = this.spheres.length;
 
         this.camera = new Camera([-20.0, 0.0, 0.0]);
+        this.buildBVH();
+        
+    }
 
-        this.sphereIndices = new Array(this.sphereCount);
+    buildBVH() {
+        this.triangleIndices = new Array(this.triangles.length);
 
-        for(var i: number = 0; i < this.sphereCount; i++) {
-            this.sphereIndices[i] = i;
+        for(var i: number = 0; i < this.triangles.length; i++) {
+            this.triangleIndices[i] = i;
         }
 
-        this.nodes = new Array(2 * this.sphereCount -1);
-        for(var i: number = 0; i < 2 * this.sphereCount -1; i++) {
+        this.nodes = new Array(2 * this.triangles.length -1);
+        for(var i: number = 0; i < 2 * this.triangles.length -1; i++) {
             this.nodes[i] = new Node();
         }
 
         var root: Node = this.nodes[0];
         root.leftChild = 0;
-        root.sphereCount = this.sphereCount;
+        root.primitiveCount = this.triangles.length;
         this.nodesUsed += 1;
 
         this.updateBounds(0);
@@ -62,16 +85,16 @@ export class Scene{
         node.minCorner = [99999, 99999, 99999];
         node.maxCorner = [-99999, -99999, -99999];
 
-        for(var i: number = 0; i < node.sphereCount; i++) {
-            const sphere: Sphere = this.spheres[this.sphereIndices[node.leftChild + i]];
-            const axis: vec3 = [sphere.radius, sphere.radius, sphere.radius];
+        for(var i: number = 0; i < node.primitiveCount; i++) {
+            const triangle: Triangle = this.triangles[this.triangleIndices[node.leftChild + i]];
 
-            var temp: vec3 = [0, 0, 0];
-            vec3.subtract(temp, sphere.center, axis);
-            vec3.min(node.minCorner, node.minCorner, temp);
+            triangle.corners.forEach(
+                (corner: vec3) => {
 
-            vec3.add(temp, sphere.center, axis);
-            vec3.min(node.maxCorner, node.maxCorner, temp);
+                    vec3.min(node.minCorner, node.minCorner, corner);
+                    vec3.max(node.maxCorner, node.maxCorner, corner);
+                }
+            )
         }
     }
 
@@ -79,7 +102,7 @@ export class Scene{
 
         var node: Node = this.nodes[nodeIndex];
 
-        if(node.sphereCount <=4){
+        if(node.primitiveCount <=4){
             return;
         }
 
@@ -96,22 +119,22 @@ export class Scene{
         const splitPosition: number = node.minCorner[axis] + extent[axis] / 2;
 
         var i: number = node.leftChild;
-        var j: number = i + node.sphereCount - 1;
+        var j: number = i + node.primitiveCount - 1;
 
         while (i <= j) {
-            if(this.spheres[this.sphereIndices[i]].center[axis] < splitPosition) {
+            if(this.triangles[this.triangleIndices[i]].centroid[axis] < splitPosition) {
                 i += 1;
             }
             else {
-                var temp: number = this.sphereIndices[i];
-                this.sphereIndices[i] = this.sphereIndices[j];
-                this.sphereIndices[j] = temp;
+                var temp: number = this.triangleIndices[i];
+                this.triangleIndices[i] = this.triangleIndices[j];
+                this.triangleIndices[j] = temp;
                 j -= 1;
             }
         }
 
         var leftCount: number = i - node.leftChild;
-        if(leftCount ==0 || leftCount == node.sphereCount) {
+        if(leftCount ==0 || leftCount == node.primitiveCount) {
             return;
         }
 
@@ -121,12 +144,12 @@ export class Scene{
         this.nodesUsed += 1;
 
         this.nodes[leftChildIndex].leftChild = node.leftChild;
-        this.nodes[leftChildIndex].sphereCount = leftCount;
+        this.nodes[leftChildIndex].primitiveCount = leftCount;
         this.nodes[rightChildIndex].leftChild = i;
-        this.nodes[rightChildIndex].sphereCount = node.sphereCount - leftCount;
+        this.nodes[rightChildIndex].primitiveCount = node.primitiveCount - leftCount;
 
         node.leftChild = leftChildIndex;
-        node.sphereCount = 0;
+        node.primitiveCount = 0;
 
         this.updateBounds(leftChildIndex);
         this.updateBounds(rightChildIndex);
