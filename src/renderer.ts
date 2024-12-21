@@ -2,6 +2,7 @@ import raytracer_kernel from "./shaders/raytracer_kernel.wgsl"
 import screen_shader from "./shaders/screen_shader.wgsl"
 import { Scene } from "./scene";
 import { node } from "webpack";
+import { CubeMapMaterial } from "./cube_material";
 
 export class Renderer {
 
@@ -25,12 +26,15 @@ export class Renderer {
     sphereBuffer: GPUBuffer;
     nodeBuffer: GPUBuffer;
     sphereIndexBuffer: GPUBuffer;
+    sky_material: CubeMapMaterial;
 
     // Pipeline objects
     ray_tracing_pipeline: GPUComputePipeline;
     ray_tracing_bind_group: GPUBindGroup;
+    ray_tracing_bind_group_layout: GPUBindGroupLayout;
     screen_pipeline: GPURenderPipeline;
     screen_bind_group: GPUBindGroup;
+    screen_bind_group_layout: GPUBindGroupLayout;
 
     //Scene to Render
     scene: Scene;
@@ -49,7 +53,11 @@ export class Renderer {
 
         await this.setupDevice();
 
+        await this.makeBindGroupLayouts();
+
         await this.createAssets();
+
+        await this.makeBindGroups();
     
         await this.makePipeline();
 
@@ -75,9 +83,8 @@ export class Renderer {
 
     }
 
-    async makePipeline() {
-
-        const ray_tracing_bind_group_layout = this.device.createBindGroupLayout({
+    async makeBindGroupLayouts() {
+        this.ray_tracing_bind_group_layout = this.device.createBindGroupLayout({
             entries: [
                 {
                     binding: 0,
@@ -119,61 +126,23 @@ export class Renderer {
                         hasDynamicOffset: false,
                     }
                 },
+                {
+                    binding: 5,
+                    visibility: GPUShaderStage.COMPUTE,
+                    texture: {
+                        viewDimension: "cube",
+                    }
+                },
+                {
+                    binding: 6,
+                    visibility: GPUShaderStage.COMPUTE,
+                    sampler: {}
+                },
             ]
 
         });
-    
-        this.ray_tracing_bind_group = this.device.createBindGroup({
-            layout: ray_tracing_bind_group_layout,
-            entries: [
-                {
-                    binding: 0,
-                    resource: this.color_buffer_view
-                },
-                {
-                    binding: 1,
-                    resource: {
-                        buffer: this.sceneParameters,
-                    }
-                },
-                {
-                    binding: 2,
-                    resource: {
-                        buffer: this.sphereBuffer,
-                    }
-                },
-                {
-                    binding: 3,
-                    resource: {
-                        buffer: this.nodeBuffer,
-                    }
-                },
-                {
-                    binding: 4,
-                    resource: {
-                        buffer: this.sphereIndexBuffer,
-                    }
-                }
 
-            ]
-        });
-        
-        const ray_tracing_pipeline_layout = this.device.createPipelineLayout({
-            bindGroupLayouts: [ray_tracing_bind_group_layout]
-        });
-
-        this.ray_tracing_pipeline = this.device.createComputePipeline({
-            layout: ray_tracing_pipeline_layout,
-            
-            compute: {
-                module: this.device.createShaderModule({
-                code: raytracer_kernel,
-            }),
-            entryPoint: 'main',
-        },
-        });
-
-        const screen_bind_group_layout = this.device.createBindGroupLayout({
+        this.screen_bind_group_layout = this.device.createBindGroupLayout({
             entries: [
                 {
                     binding: 0,
@@ -188,52 +157,6 @@ export class Renderer {
             ]
 
         });
-
-        this.screen_bind_group = this.device.createBindGroup({
-            layout: screen_bind_group_layout,
-            entries: [
-                {
-                    binding: 0,
-                    resource:  this.sampler
-                },
-                {
-                    binding: 1,
-                    resource: this.color_buffer_view
-                }
-            ]
-        });
-
-        const screen_pipeline_layout = this.device.createPipelineLayout({
-            bindGroupLayouts: [screen_bind_group_layout]
-        });
-
-        this.screen_pipeline = this.device.createRenderPipeline({
-            layout: screen_pipeline_layout,
-            
-            vertex: {
-                module: this.device.createShaderModule({
-                code: screen_shader,
-            }),
-            entryPoint: 'vert_main',
-            },
-
-            fragment: {
-                module: this.device.createShaderModule({
-                code: screen_shader,
-            }),
-            entryPoint: 'frag_main',
-            targets: [
-                {
-                    format: "bgra8unorm"
-                }
-            ]
-            },
-
-            primitive: {
-                topology: "triangle-list"
-            }
-        });
-        
     }
 
     async createAssets() {
@@ -292,7 +215,132 @@ export class Renderer {
         this.sphereIndexBuffer = this.device.createBuffer(
             sphereIndexBufferDescriptor
         );
+
+        const urls = [
+            "dist/img/sky_back.png",  //x+
+            "dist/img/sky_front.png",   //x-
+            "dist/img/sky_left.png",   //y+
+            "dist/img/sky_right.png",  //y-
+            "dist/img/sky_top.png", //z+
+            "dist/img/sky_bottom.png",    //z-
+        ]
+        this.sky_material = new CubeMapMaterial();
+        await this.sky_material.initialize(this.device, urls);
     }
+
+    async makePipeline() {
+
+        
+    
+        
+        
+        const ray_tracing_pipeline_layout = this.device.createPipelineLayout({
+            bindGroupLayouts: [this.ray_tracing_bind_group_layout]
+        });
+
+        this.ray_tracing_pipeline = this.device.createComputePipeline({
+            layout: ray_tracing_pipeline_layout,
+            
+            compute: {
+                module: this.device.createShaderModule({
+                code: raytracer_kernel,
+            }),
+            entryPoint: 'main',
+        },
+        });
+
+        const screen_pipeline_layout = this.device.createPipelineLayout({
+            bindGroupLayouts: [this.screen_bind_group_layout]
+        });
+
+        this.screen_pipeline = this.device.createRenderPipeline({
+            layout: screen_pipeline_layout,
+            
+            vertex: {
+                module: this.device.createShaderModule({
+                code: screen_shader,
+            }),
+            entryPoint: 'vert_main',
+            },
+
+            fragment: {
+                module: this.device.createShaderModule({
+                code: screen_shader,
+            }),
+            entryPoint: 'frag_main',
+            targets: [
+                {
+                    format: "bgra8unorm"
+                }
+            ]
+            },
+
+            primitive: {
+                topology: "triangle-list"
+            }
+        });
+        
+    }
+
+    async makeBindGroups() {
+        this.ray_tracing_bind_group = this.device.createBindGroup({
+            layout: this.ray_tracing_bind_group_layout,
+            entries: [
+                {
+                    binding: 0,
+                    resource: this.color_buffer_view
+                },
+                {
+                    binding: 1,
+                    resource: {
+                        buffer: this.sceneParameters,
+                    }
+                },
+                {
+                    binding: 2,
+                    resource: {
+                        buffer: this.sphereBuffer,
+                    }
+                },
+                {
+                    binding: 3,
+                    resource: {
+                        buffer: this.nodeBuffer,
+                    }
+                },
+                {
+                    binding: 4,
+                    resource: {
+                        buffer: this.sphereIndexBuffer,
+                    }
+                },
+                {
+                    binding: 5,
+                    resource: this.sky_material.view
+                },
+                {
+                    binding: 6,
+                    resource: this.sky_material.sampler
+                },
+            ]
+        });
+
+        this.screen_bind_group = this.device.createBindGroup({
+            layout: this.screen_bind_group_layout,
+            entries: [
+                {
+                    binding: 0,
+                    resource:  this.sampler
+                },
+                {
+                    binding: 1,
+                    resource: this.color_buffer_view
+                }
+            ]
+        });
+    }
+
+    
 
     prepareScene() {
 
@@ -303,6 +351,7 @@ export class Renderer {
             cameraUp: this.scene.camera.up,
             sphereCount: this.scene.spheres.length
         }
+        const maxBounces: number = 4;
 
         this.device.queue.writeBuffer(
             this.sceneParameters, 0,
@@ -319,7 +368,7 @@ export class Renderer {
                     sceneData.cameraRight[0],
                     sceneData.cameraRight[1],
                     sceneData.cameraRight[2],
-                    1.0,
+                    maxBounces,
                     sceneData.cameraUp[0],
                     sceneData.cameraUp[1],
                     sceneData.cameraUp[2],

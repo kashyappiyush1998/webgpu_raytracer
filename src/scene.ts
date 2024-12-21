@@ -13,7 +13,7 @@ export class Scene{
     sphereIndices: number[];
 
     constructor() {
-        this.spheres = new Array(8192);
+        this.spheres = new Array(1024);
         for(let i = 0; i < this.spheres.length; i++){
 
             const center: number[] = [
@@ -79,7 +79,7 @@ export class Scene{
 
         var node: Node = this.nodes[nodeIndex];
 
-        if(node.sphereCount <=2){
+        if(node.sphereCount <=4){
             return;
         }
 
