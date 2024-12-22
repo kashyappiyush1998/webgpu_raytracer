@@ -8,6 +8,9 @@ struct Triangle {
     corner_a: vec3<f32>,
     corner_b: vec3<f32>,
     corner_c: vec3<f32>,
+    corner_a_uv: vec2<f32>,
+    corner_b_uv: vec2<f32>,
+    corner_c_uv: vec2<f32>,
     color: vec3<f32>,
 }
 
@@ -94,7 +97,7 @@ fn rayColor(ray: Ray) -> vec3<f32> {
     temp_ray.origin = ray.origin;
     temp_ray.direction = ray.direction;
 
-    let bounces: u32 = u32(scene.maxBounces);
+    let bounces: u32 = 1;//u32(scene.maxBounces);
 
     for(var bounce: u32 = 0; bounce < bounces; bounce++) {
         result = trace(temp_ray);
@@ -169,7 +172,15 @@ fn trace(ray: Ray) -> RenderState {
         else{
 
             for(var i: u32 = 0; i < primitiveCount; i++) {
-                var newRenderState : RenderState = hit_triangle(ray, objects.triangles[u32(triangleLookup.primitiveIndices[i + contents])], 0.001, nearestHit, renderState);
+                var newRenderState: RenderState;
+                var barycentric_coordinates : vec3<f32> = hit_triangle(ray, objects.triangles[u32(triangleLookup.primitiveIndices[i + contents])], 0.001, nearestHit, renderState, &newRenderState);
+
+                var u: f32 = barycentric_coordinates[0];
+                var v: f32 = barycentric_coordinates[1];
+                var w: f32 = barycentric_coordinates[2];
+                if(u!=0 && v!=0 && w!=0) {
+
+                }
 
                 if(newRenderState.hit){
                     nearestHit = newRenderState.t;
@@ -195,41 +206,39 @@ fn trace(ray: Ray) -> RenderState {
     return renderState;
 }
 
-fn hit_sphere(ray: Ray, sphere: Sphere, tMin: f32, tMax: f32, oldRenderState: RenderState) -> RenderState {
-    let co: vec3<f32> = ray.origin - sphere.center;
-    let a: f32 = dot(ray.direction, ray.direction);
-    let b: f32 = 2.0 * dot(ray.direction, co);
-    let c: f32 = dot(co, co) - sphere.radius * sphere.radius;
-    let discriminant: f32 = b * b - 4.0 * a * c;
+// fn hit_sphere(ray: Ray, sphere: Sphere, tMin: f32, tMax: f32, oldRenderState: RenderState) -> RenderState {
+//     let co: vec3<f32> = ray.origin - sphere.center;
+//     let a: f32 = dot(ray.direction, ray.direction);
+//     let b: f32 = 2.0 * dot(ray.direction, co);
+//     let c: f32 = dot(co, co) - sphere.radius * sphere.radius;
+//     let discriminant: f32 = b * b - 4.0 * a * c;
 
-    var renderState: RenderState;
-    renderState.color = oldRenderState.color;
+//     renderState.color = oldRenderState.color;
 
-    if(discriminant > 0.0) {
+//     if(discriminant > 0.0) {
 
-        let t: f32 = (-b - sqrt(discriminant)) / (2 * a);
+//         let t: f32 = (-b - sqrt(discriminant)) / (2 * a);
 
-        if(t > tMin && t < tMax) {
-            renderState.t = t;
-            renderState.position = ray.origin + t * ray.direction;
-            renderState.normal = normalize(renderState.position - sphere.center);
-            renderState.color = sphere.color;
-            renderState.hit = true;
-            return renderState;
-        }
-    }
+//         if(t > tMin && t < tMax) {
+//             renderState.t = t;
+//             renderState.position = ray.origin + t * ray.direction;
+//             renderState.normal = normalize(renderState.position - sphere.center);
+//             renderState.color = sphere.color;
+//             renderState.hit = true;
+//             return renderState;
+//         }
+//     }
 
-    renderState.hit = false;
-    return renderState;
-}
+//     renderState.hit = false;
+//     return renderState;
+// }
 
-fn hit_triangle(ray: Ray, tri: Triangle, tMin: f32, tMax: f32, oldRenderState: RenderState) -> RenderState {
+fn hit_triangle(ray: Ray, tri: Triangle, tMin: f32, tMax: f32, oldRenderState: RenderState, newRenderState: ptr<function, RenderState>) -> vec3<f32> {
     
     //Set up a blank renderstate,
     //right now this hasn't hit anything
-    var renderState: RenderState;
-    renderState.color = oldRenderState.color;
-    renderState.hit = false;
+    newRenderState.color = oldRenderState.color;
+    newRenderState.hit = false;
 
     //Direction vectors
     let edge_ab: vec3<f32> = tri.corner_b - tri.corner_a;
@@ -244,7 +253,7 @@ fn hit_triangle(ray: Ray, tri: Triangle, tMin: f32, tMax: f32, oldRenderState: R
     }
     //early exit, ray parallel with triangle surface
     if (abs(ray_dot_tri) < 0.00001) {
-        return renderState;
+        return vec3<f32>(0, 0, 0);
     }
 
     var system_matrix: mat3x3<f32> = mat3x3<f32>(
@@ -254,7 +263,7 @@ fn hit_triangle(ray: Ray, tri: Triangle, tMin: f32, tMax: f32, oldRenderState: R
     );
     let denominator: f32 = determinant(system_matrix);
     if (abs(denominator) < 0.00001) {
-        return renderState;
+        return vec3<f32>(0, 0, 0);
     }
 
     system_matrix = mat3x3<f32>(
@@ -265,7 +274,7 @@ fn hit_triangle(ray: Ray, tri: Triangle, tMin: f32, tMax: f32, oldRenderState: R
     let u: f32 = determinant(system_matrix) / denominator;
     
     if (u < 0.0 || u > 1.0) {
-        return renderState;
+        return vec3<f32>(0, 0, 0);
     }
 
     system_matrix = mat3x3<f32>(
@@ -275,7 +284,7 @@ fn hit_triangle(ray: Ray, tri: Triangle, tMin: f32, tMax: f32, oldRenderState: R
     );
     let v: f32 = determinant(system_matrix) / denominator;
     if (v < 0.0 || u + v > 1.0) {
-        return renderState;
+        return vec3<f32>(0, 0, 0);
     }
 
     system_matrix = mat3x3<f32>(
@@ -287,15 +296,15 @@ fn hit_triangle(ray: Ray, tri: Triangle, tMin: f32, tMax: f32, oldRenderState: R
 
     if (t > tMin && t < tMax) {
 
-        renderState.position = ray.origin + t * ray.direction;
-        renderState.normal = n;
-        renderState.color = tri.color;
-        renderState.t = t;
-        renderState.hit = true;
-        return renderState;
+        newRenderState.position = ray.origin + t * ray.direction;
+        newRenderState.normal = n;
+        newRenderState.color = tri.color;
+        newRenderState.t = t;
+        newRenderState.hit = true;
+        return vec3<f32>(u, v, 1-u-v);
     }
 
-    return renderState;
+    return vec3<f32>(u, v, 1-u-v);
 }
 
 fn hit_aabb(ray: Ray, node: Node) -> f32 {

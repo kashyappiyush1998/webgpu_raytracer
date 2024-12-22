@@ -193,7 +193,7 @@ export class Renderer {
         );
 
         const triangleBufferDescriptor: GPUBufferDescriptor = {
-            size: 32 * this.scene.triangles.length,
+            size: 56 * this.scene.triangles.length,
             usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
         };
         this.triangleBuffer = this.device.createBuffer(
@@ -377,23 +377,31 @@ export class Renderer {
             ), 0, 16
         );
 
-        const triangleData: Float32Array = new Float32Array(16 * this.scene.triangleCount);
+        const triangleData: Float32Array = new Float32Array(28 * this.scene.triangleCount);
         for (let i = 0; i < this.scene.triangleCount; i++) {
             for (var corner = 0; corner < 3; corner++) {
                 for (var dimension = 0; dimension < 3; dimension++) {
-                    triangleData[16*i + 4 * corner + dimension] = 
+                    triangleData[28*i + 4 * corner + dimension] = 
                         this.scene.triangles[i].corners[corner][dimension];
                 }
-                triangleData[16*i + 4 * corner + 3] = 0.0;
+                triangleData[28*i + 4 * corner + 3] = 0.0;
+            }
+            for (var corner_uv = 0; corner_uv < 3; corner_uv++) {
+                for (var dimension = 0; dimension < 2; dimension++) {
+                    triangleData[28*i + 12 + 4 * corner_uv + dimension] = 
+                        this.scene.triangles[i].uv[corner_uv][dimension];
+                }
+                triangleData[28*i + 12 + 4 * corner + 2] = 0.0;
+                triangleData[28*i + 12 + 4 * corner + 3] = 0.0;
             }
             for (var channel = 0; channel < 3; channel++) {
-                triangleData[16*i + 12 + channel] = this.scene.triangles[i].color[channel];
+                triangleData[28*i + 24 + channel] = this.scene.triangles[i].color[channel];
             }
-            triangleData[16*i + 15] = 0.0;
+            triangleData[28*i + 23] = 0.0;
         }
 
         this.device.queue.writeBuffer(
-            this.triangleBuffer, 0, triangleData, 0, 8 * this.scene.triangleCount
+            this.triangleBuffer, 0, triangleData, 0, 14 * this.scene.triangleCount
         );
         
         const nodeData: Float32Array = new Float32Array(8 * this.scene.nodesUsed);

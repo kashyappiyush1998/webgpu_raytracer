@@ -1,13 +1,16 @@
-import { vec3 } from "gl-matrix";
+import { vec2, vec3 } from "gl-matrix";
 
 export class Triangle {
 
     corners: vec3[]
+    uv: vec2[]
+    normal: vec3[]
     color: vec3
     centroid: vec3
 
     constructor() {
         this.corners = [];
+        this.uv = [];
     }
 
     build_from_center_and_offsets(center: vec3, offsets: vec3[], color: vec3) {

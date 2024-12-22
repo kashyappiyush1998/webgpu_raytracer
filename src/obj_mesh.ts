@@ -107,20 +107,33 @@ export class ObjMesh {
        const triangle_count = vertex_descriptions.length - 3; // accounting also for "f"
        for (var i = 0; i < triangle_count; i++) {
             var tri: Triangle = new Triangle();
-            tri.corners.push(this.read_corner(vertex_descriptions[1], result));
-            tri.corners.push(this.read_corner(vertex_descriptions[2 + i], result));
-            tri.corners.push(this.read_corner(vertex_descriptions[3 + i], result));
+            tri.corners.push(this.read_corner_vertex(vertex_descriptions[1], result));
+            tri.uv.push(this.read_corner_tex_coord(vertex_descriptions[1], result));
+            tri.corners.push(this.read_corner_vertex(vertex_descriptions[2 + i], result));
+            tri.uv.push(this.read_corner_tex_coord(vertex_descriptions[1], result));
+            tri.corners.push(this.read_corner_vertex(vertex_descriptions[3 + i], result));
+            tri.uv.push(this.read_corner_tex_coord(vertex_descriptions[1], result));
             tri.color = this.color;
             tri.make_centroid();
             this.triangles.push(tri);
        }
     }
 
-    read_corner(vertex_description: string, result: number[]): vec3 {
+    read_corner_vertex(vertex_description: string, result: number[]): vec3 {
         const v_vt_vn = vertex_description.split("/");
         const v = this.v[Number(v_vt_vn[0]).valueOf() - 1];
-        const vt = this.vt[Number(v_vt_vn[1]).valueOf() - 1];
-        const vn = this.vn[Number(v_vt_vn[2]).valueOf() - 1];
         return v;
+    }
+
+    read_corner_tex_coord(vertex_description: string, result: number[]): vec2 {
+        const v_vt_vn = vertex_description.split("/");
+        const vt = this.vt[Number(v_vt_vn[1]).valueOf() - 1];
+        return vt;
+    }
+
+    read_corner_normal(vertex_description: string, result: number[]): vec3 {
+        const v_vt_vn = vertex_description.split("/");
+        const vn = this.vn[Number(v_vt_vn[2]).valueOf() - 1];
+        return vn;
     }
 }
