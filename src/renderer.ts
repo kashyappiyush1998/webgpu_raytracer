@@ -3,6 +3,7 @@ import screen_shader from "./shaders/screen_shader.wgsl"
 import { Scene } from "./scene";
 import { node } from "webpack";
 import { CubeMapMaterial } from "./cube_material";
+import { Texture2D } from "./texture";
 
 export class Renderer {
 
@@ -27,6 +28,7 @@ export class Renderer {
     nodeBuffer: GPUBuffer;
     triangleIndexBuffer: GPUBuffer;
     sky_material: CubeMapMaterial;
+    texture_man_head: Texture2D;
 
     // Pipeline objects
     ray_tracing_pipeline: GPUComputePipeline;
@@ -138,6 +140,18 @@ export class Renderer {
                     visibility: GPUShaderStage.COMPUTE,
                     sampler: {}
                 },
+                {
+                    binding: 7,
+                    visibility: GPUShaderStage.COMPUTE,
+                    texture: {
+                        viewDimension: "2d",
+                    }
+                },
+                {
+                    binding: 8,
+                    visibility: GPUShaderStage.COMPUTE,
+                    sampler: {}
+                },
             ]
 
         });
@@ -193,7 +207,7 @@ export class Renderer {
         );
 
         const triangleBufferDescriptor: GPUBufferDescriptor = {
-            size: 56 * this.scene.triangles.length,
+            size: 96 * this.scene.triangles.length,
             usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
         };
         this.triangleBuffer = this.device.createBuffer(
@@ -226,6 +240,9 @@ export class Renderer {
         ]
         this.sky_material = new CubeMapMaterial();
         await this.sky_material.initialize(this.device, urls);
+
+        this.texture_man_head = new Texture2D();
+        await this.texture_man_head.initialize(this.device, "dist/models/man_head.png");
     }
 
     async makePipeline() {
@@ -322,6 +339,14 @@ export class Renderer {
                     binding: 6,
                     resource: this.sky_material.sampler
                 },
+                {
+                    binding: 7,
+                    resource: this.texture_man_head.view
+                },
+                {
+                    binding: 8,
+                    resource: this.texture_man_head.sampler
+                },
             ]
         });
 
@@ -377,31 +402,34 @@ export class Renderer {
             ), 0, 16
         );
 
-        const triangleData: Float32Array = new Float32Array(28 * this.scene.triangleCount);
+        const triangleData: Float32Array = new Float32Array(24 * this.scene.triangleCount);
+        // for (let i = 0; i < 24 * this.scene.triangleCount; i++) {
+        //     triangleData[i] = 0.0;
+        // }
         for (let i = 0; i < this.scene.triangleCount; i++) {
             for (var corner = 0; corner < 3; corner++) {
                 for (var dimension = 0; dimension < 3; dimension++) {
-                    triangleData[28*i + 4 * corner + dimension] = 
+                    triangleData[24*i + 4 * corner + dimension] = 
                         this.scene.triangles[i].corners[corner][dimension];
                 }
-                triangleData[28*i + 4 * corner + 3] = 0.0;
-            }
-            for (var corner_uv = 0; corner_uv < 3; corner_uv++) {
-                for (var dimension = 0; dimension < 2; dimension++) {
-                    triangleData[28*i + 12 + 4 * corner_uv + dimension] = 
-                        this.scene.triangles[i].uv[corner_uv][dimension];
-                }
-                triangleData[28*i + 12 + 4 * corner + 2] = 0.0;
-                triangleData[28*i + 12 + 4 * corner + 3] = 0.0;
+                triangleData[24*i + 4 * corner + 3] = 0.0;
             }
             for (var channel = 0; channel < 3; channel++) {
-                triangleData[28*i + 24 + channel] = this.scene.triangles[i].color[channel];
+                triangleData[24*i + 12 + channel] = this.scene.triangles[i].color[channel];
             }
-            triangleData[28*i + 23] = 0.0;
+            triangleData[24*i + 15] = 0.0;
+            triangleData[24*i + 16] = this.scene.triangles[i].uv[0][0];
+            triangleData[24*i + 17] = this.scene.triangles[i].uv[0][1];
+            triangleData[24*i + 18] = this.scene.triangles[i].uv[1][0];
+            triangleData[24*i + 19] = this.scene.triangles[i].uv[1][1];
+            triangleData[24*i + 20] = this.scene.triangles[i].uv[2][0];
+            triangleData[24*i + 21] = this.scene.triangles[i].uv[2][1];
+            triangleData[24*i + 22] = 0.0;
+            triangleData[24*i + 23] = 0.0;
         }
 
         this.device.queue.writeBuffer(
-            this.triangleBuffer, 0, triangleData, 0, 14 * this.scene.triangleCount
+            this.triangleBuffer, 0, triangleData, 0, 24 * this.scene.triangleCount
         );
         
         const nodeData: Float32Array = new Float32Array(8 * this.scene.nodesUsed);
@@ -432,9 +460,10 @@ export class Renderer {
 
     render = () => {
 
+        const startTime = performance.now();
+
         this.prepareScene();
 
-        const startTime = performance.now();
 
         const commandEncoder : GPUCommandEncoder = this.device.createCommandEncoder();
 
@@ -446,6 +475,9 @@ export class Renderer {
             Math.floor((this.canvas.height + 7) / 8), 1);
         ray_trace_pass.end();
 
+        
+
+
         const textureView : GPUTextureView = this.context.getCurrentTexture().createView();
         const renderpass : GPURenderPassEncoder = commandEncoder.beginRenderPass({
             colorAttachments: [{
@@ -456,22 +488,26 @@ export class Renderer {
             }]
         });
 
+
         renderpass.setPipeline(this.screen_pipeline);
         renderpass.setBindGroup(0, this.screen_bind_group);
+
         renderpass.draw(6, 1, 0, 0);
-        
+
         renderpass.end();
-    
+
         this.device.queue.submit([commandEncoder.finish()]);
 
         this.device.queue.onSubmittedWorkDone().then(() => {
-            this.change_every_frame.innerHTML = "Trinagle count: " + this.scene.triangles.length.toFixed(0);
-            this.change_every_frame.innerHTML += '<br />RenderTime: ' + (performance.now() - startTime).toFixed(5) + ' ms';
+            // this.change_every_frame.innerHTML = "Triangle count: " + this.scene.triangles.length.toFixed(0);
+            this.change_every_frame.innerHTML = '<br />RenderTime: ' + (performance.now() - startTime).toFixed(5) + ' ms';
         });
 
 
         
         requestAnimationFrame(this.render);
+        
+
         const totalTime = performance.now() - startTime;
 
         if(performance.now() - this.passedTime > 1000){

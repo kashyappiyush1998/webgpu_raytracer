@@ -8,10 +8,10 @@ struct Triangle {
     corner_a: vec3<f32>,
     corner_b: vec3<f32>,
     corner_c: vec3<f32>,
+    color: vec3<f32>,
     corner_a_uv: vec2<f32>,
     corner_b_uv: vec2<f32>,
     corner_c_uv: vec2<f32>,
-    color: vec3<f32>,
 }
 
 struct ObjectData {
@@ -62,6 +62,8 @@ struct RenderState {
 @group(0) @binding(4) var<storage, read> triangleLookup: ObjectIndices;
 @group(0) @binding(5) var skyMaterial: texture_cube<f32>;
 @group(0) @binding(6) var skySampler: sampler;
+@group(0) @binding(7) var texture: texture_2d<f32>; 
+@group(0) @binding(8) var textureSampler: sampler;
 
 @compute @workgroup_size(8,8,1)
 fn main(@builtin(global_invocation_id) GlobalInvocationID : vec3<u32>) {
@@ -90,7 +92,7 @@ fn main(@builtin(global_invocation_id) GlobalInvocationID : vec3<u32>) {
 
 fn rayColor(ray: Ray) -> vec3<f32> {
 
-    var color: vec3<f32> = vec3<f32>(1.0, 1.0, 1.0);
+    var color: vec3<f32> = vec3<f32>(0.0, 0.0, 0.0);
     var result: RenderState;
 
     var temp_ray: Ray;
@@ -101,7 +103,7 @@ fn rayColor(ray: Ray) -> vec3<f32> {
 
     for(var bounce: u32 = 0; bounce < bounces; bounce++) {
         result = trace(temp_ray);
-        color = color * result.color;
+        color += result.color;
 
         if(!result.hit){
             break;
@@ -111,9 +113,11 @@ fn rayColor(ray: Ray) -> vec3<f32> {
         temp_ray.direction = normalize(reflect(temp_ray.direction, result.normal));
     }
 
-    if(result.hit) {
-        color = vec3<f32>(0.0, 0.0, 0.0);
-    }
+    color /= f32(bounces);
+
+    // if(result.hit) {
+    //     color = vec3<f32>(1.0, 1.0, 1.0);
+    // }
 
     return color;
 }
@@ -178,13 +182,14 @@ fn trace(ray: Ray) -> RenderState {
                 var u: f32 = barycentric_coordinates[0];
                 var v: f32 = barycentric_coordinates[1];
                 var w: f32 = barycentric_coordinates[2];
-                if(u!=0 && v!=0 && w!=0) {
-
-                }
 
                 if(newRenderState.hit){
+                    var uv_coords: vec2<f32> = uv_triangle(objects.triangles[u32(triangleLookup.primitiveIndices[i + contents])], u, v, w);
+                    var color: vec4<f32> = textureSampleLevel(texture, textureSampler, uv_coords, 0.0);
                     nearestHit = newRenderState.t;
                     renderState = newRenderState;
+                    // renderState.color = vec3<f32>(uv_coords.x, uv_coords.y, 0.0);
+                    renderState.color = color.xyz;
                 }
             }
             if(stackLocation ==0 ) {
@@ -233,6 +238,12 @@ fn trace(ray: Ray) -> RenderState {
 //     return renderState;
 // }
 
+fn uv_triangle(tri: Triangle, u: f32, v: f32, w: f32) -> vec2<f32> {
+    var uv_coord: vec2<f32>;
+    uv_coord = u * tri.corner_a_uv + v * tri.corner_b_uv + w * tri.corner_c_uv; 
+    return uv_coord;
+}
+
 fn hit_triangle(ray: Ray, tri: Triangle, tMin: f32, tMax: f32, oldRenderState: RenderState, newRenderState: ptr<function, RenderState>) -> vec3<f32> {
     
     //Set up a blank renderstate,
@@ -273,7 +284,7 @@ fn hit_triangle(ray: Ray, tri: Triangle, tMin: f32, tMax: f32, oldRenderState: R
     );
     let u: f32 = determinant(system_matrix) / denominator;
     
-    if (u < 0.0 || u > 1.0) {
+    if (u < 0 || u > 1) {
         return vec3<f32>(0, 0, 0);
     }
 
