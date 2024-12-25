@@ -1,34 +1,34 @@
-import { vec3 } from "gl-matrix";
+import { vec3, mat4 } from "gl-matrix";
+
+export function Deg2Rad(theta: number) : number {
+    return theta * Math.PI / 180;
+}
 
 export class Camera {
 
-    position: Float32Array;
-    theta: number;
-    phi: number;
-    forwards: Float32Array;
-    right: Float32Array;
-    up: Float32Array;
+    position: vec3;
+    eulers: vec3;
+    view: mat4;
+    forwards: vec3;
+    right: vec3;
+    up: vec3;
 
-    constructor(position: number[]){
-        this.position = new Float32Array(position);
-        this.theta = 0.0;
-        this.phi = 0.0;
-
-        this.recalculate_vectors();
+    constructor(position: vec3, theta: number, phi: number){
+        this.position = position;
+        this.eulers = [0, phi, theta];
+        this.forwards = vec3.create();
+        this.right = vec3.create();
+        this.up = vec3.create();
     }
 
     recalculate_vectors(){
-        this.forwards = new Float32Array(
-            [
-                Math.cos(this.theta * 180.0/Math.PI) * Math.cos(this.phi * 180.0/Math.PI),
-                Math.sin(this.theta * 180.0/Math.PI) * Math.cos(this.phi * 180.0/Math.PI),
-                Math.sin(this.phi * 180.0/Math.PI)
-            ]
-        );
+        this.forwards = [
+            Math.cos(Deg2Rad(this.eulers[2])) * Math.cos(Deg2Rad(this.eulers[1])),
+            Math.sin(Deg2Rad(this.eulers[2])) * Math.cos(Deg2Rad(this.eulers[1])),
+            Math.sin(Deg2Rad(this.eulers[1]))
+        ];
 
-        this.right = new Float32Array([0.0, 0.0, 0.0]);
         vec3.cross(this.right, this.forwards, [0.0, 0.0, 1.0]);
-        this.up = new Float32Array([0.0, 0.0, 0.0]);
         vec3.cross(this.up, this.right, this.forwards);
     }
 }

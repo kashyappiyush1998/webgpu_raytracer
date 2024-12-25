@@ -4,6 +4,7 @@ import { Scene } from "./scene";
 import { node } from "webpack";
 import { CubeMapMaterial } from "./cube_material";
 import { Texture2D } from "./texture";
+import $ from "jquery";
 
 export class Renderer {
 
@@ -41,6 +42,15 @@ export class Renderer {
     //Scene to Render
     scene: Scene;
 
+    //Labels for displaying state
+    keyLabel: HTMLElement;
+    mouseXLabel: HTMLElement;
+    mouseYLabel: HTMLElement;
+
+    forwards_amount: number;
+    right_amount: number;
+    up_amount: number;
+
 
     constructor(canvas: HTMLCanvasElement, change_every_frame: HTMLPreElement, change_every_second: HTMLPreElement, scene: Scene){
         this.canvas = canvas;
@@ -49,6 +59,37 @@ export class Renderer {
         this.count = 0;
         this.passedTime = 0;
         this.scene = scene;
+
+        this.keyLabel = <HTMLElement>document.getElementById("key-label");
+        this.mouseXLabel = <HTMLElement>document.getElementById("mouse-x-label");
+        this.mouseYLabel = <HTMLElement>document.getElementById("mouse-y-label");
+
+        this.forwards_amount = 0;
+        this.right_amount = 0;
+        this.up_amount = 0;
+
+        $(document).on(
+            "keydown", 
+            (event) => {
+                this.handle_keypress(event);
+            }
+        );
+        $(document).on(
+            "keyup", 
+            (event) => {
+                this.handle_keyrelease(event);
+            }
+        );
+        this.canvas.onclick = () => {
+            this.canvas.requestPointerLock();
+        }
+        this.canvas.onclick = () => {
+            this.canvas.requestPointerLock();
+        }
+        this.canvas.addEventListener(
+            "mousemove", 
+            (event: MouseEvent) => {this.handle_mouse_move(event);}
+        );
     }
 
    async Initialize() {
@@ -369,6 +410,8 @@ export class Renderer {
     
 
     prepareScene() {
+        this.scene.update();
+        this.scene.move_camera(this.forwards_amount, this.right_amount, this.up_amount);
 
         const sceneData = {
             cameraPos: this.scene.camera.position,
@@ -525,5 +568,60 @@ export class Renderer {
         }
         this.count += 1;
     }
-    
+
+    handle_keypress(event: JQuery.KeyDownEvent) {
+        this.keyLabel.innerText = event.code;
+
+        if (event.code == "KeyW") {
+            this.forwards_amount = 0.02;
+        }
+        if (event.code == "KeyS") {
+            this.forwards_amount = -0.02;
+        }
+        if (event.code == "KeyA") {
+            this.right_amount = -0.02;
+        }
+        if (event.code == "KeyD") {
+            this.right_amount = 0.02;
+        }
+        if (event.code == "KeyX") {
+            this.up_amount = 0.02;
+        }
+        if (event.code == "KeyZ") {
+            this.up_amount = -0.02;
+        }
+
+    }
+
+    handle_keyrelease(event: JQuery.KeyUpEvent) {
+        this.keyLabel.innerText = event.code;
+
+        if (event.code == "KeyW") {
+            this.forwards_amount = 0;
+        }
+        if (event.code == "KeyS") {
+            this.forwards_amount = 0;
+        }
+        if (event.code == "KeyA") {
+            this.right_amount = 0;
+        }
+        if (event.code == "KeyD") {
+            this.right_amount = 0;
+        }
+        if (event.code == "KeyX") {
+            this.up_amount = 0;
+        }
+        if (event.code == "KeyZ") {
+            this.up_amount = 0;
+        }
+    }
+
+    handle_mouse_move(event: MouseEvent) {
+        this.mouseXLabel.innerText = event.clientX.toString();
+        this.mouseYLabel.innerText = event.clientY.toString();
+        
+        this.scene.spin_camera(
+            event.movementX / 5, event.movementY / 5
+        );
+    }
 }

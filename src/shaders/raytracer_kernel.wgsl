@@ -222,8 +222,8 @@ fn trace(ray: Ray) -> RenderState {
                         nearestHit = newRenderState.t;
                         renderState = newRenderState;
                         // renderState.color = vec3<f32>(uv_coords.x, uv_coords.y, 0.0);
-                        renderState.color = interpolatedNormal * 0.5 + 0.5;
-                        // renderState.color = diffuse * baseColor;
+                        // renderState.color = interpolatedNormal * 0.5 + 0.5;
+                        renderState.color = diffuse * baseColor;
                     }
                 }
             }

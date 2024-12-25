@@ -20,7 +20,40 @@ export class Scene{
     constructor(triangleCount: number) {
 
         this.mesh = new ObjMesh();
-        this.camera = new Camera([-2.5, 0.0, 0.0]);        
+        this.camera = new Camera([-2.5, 0.0, 0.0], 0, 0);        
+    }
+
+    update() {
+        this.camera.recalculate_vectors();
+    }
+
+    spin_camera(dX: number, dY: number) {
+        this.camera.eulers[2] -= dX;
+        this.camera.eulers[2] %= 360;
+
+        this.camera.eulers[1] = Math.min(
+            89, Math.max(
+                -89,
+                this.camera.eulers[1] + dY
+            )
+        );
+    }
+
+    move_camera(forwards_amount: number, right_amount: number, up_amount: number) {
+        vec3.scaleAndAdd(
+            this.camera.position, this.camera.position, 
+            this.camera.forwards, forwards_amount
+        );
+
+        vec3.scaleAndAdd(
+            this.camera.position, this.camera.position, 
+            this.camera.right, right_amount
+        );
+
+        vec3.scaleAndAdd(
+            this.camera.position, this.camera.position, 
+            this.camera.up, up_amount
+        );
     }
 
     async make_scene() {

@@ -15,9 +15,11 @@
   "dependencies": {
     "@loaders.gl/core": "^4.3.3",
     "@loaders.gl/gltf": "^4.3.3",
+    "@types/jquery": "^3.5.32",
     "@types/node": "^20.8.9",
     "@webgpu/types": "^0.1.38",
     "gl-matrix": "^3.4.3",
+    "jquery": "^3.7.1",
     "live-server": "^1.2.2",
     "node": "^21.1.0",
     "ts-loader": "^9.5.0",
