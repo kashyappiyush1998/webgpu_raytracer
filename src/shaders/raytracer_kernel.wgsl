@@ -75,22 +75,31 @@ fn main(@builtin(global_invocation_id) GlobalInvocationID : vec3<u32>) {
         return;
     }
 
-    let horizontal_coefficient: f32 = (f32(screen_pos.x) - f32(screen_size.x) / 2) / f32(screen_size.x);
-    let vertical_coefficient: f32 = (f32(screen_pos.y) - f32(screen_size.y) / 2) / f32(screen_size.x);
     let forwards: vec3<f32> = scene.cameraForwards;
     let right: vec3<f32> = scene.cameraRight;
     let up: vec3<f32> = scene.cameraUp;
-
     var pixel_color : vec3<f32> = vec3<f32>(0.0, 0.0, 0.0);
     var myRay: Ray;
     myRay.origin = scene.cameraPos;
-    for (var i = 0; i < 10; i = i + 1) {
-        let offset = randomOffset(vec2<f32>(GlobalInvocationID.xy) + vec2<f32>(f32(i), f32(i))) * 10;
-        myRay.direction = normalize(forwards + (horizontal_coefficient+offset.x) * right + (vertical_coefficient+offset.y) * up);
 
-        pixel_color += rayColor(myRay);
-    }
-    pixel_color *= 0.1;
+    let num_samples: f32 = 144.0;
+    let width: f32 = sqrt(num_samples);
+    let height: f32 = num_samples/width;
+    let each_dist_x: f32 = 1.0/(width-1.0);
+    let each_dist_y: f32 = 1.0/(height-1.0);
+
+    for(var i: u32 = 0; i < u32(width); i++){
+        for(var j: u32 = 0; j < u32(height); j++){
+            
+            let horizontal_coefficient: f32 = (f32(screen_pos.x) + each_dist_x * f32(i) - f32(screen_size.x) / 2) / f32(screen_size.x);
+            let vertical_coefficient: f32 = (f32(screen_pos.y) + each_dist_y * f32(j) - f32(screen_size.y) / 2) / f32(screen_size.x);
+
+            myRay.direction = normalize(forwards + horizontal_coefficient * right + vertical_coefficient * up);
+            pixel_color += rayColor(myRay);
+
+        }
+    } 
+    pixel_color /= num_samples;
 
     textureStore(color_buffer, screen_pos, vec4<f32>(pixel_color, 1.0));
 }
@@ -256,9 +265,9 @@ fn hit_triangle(ray: Ray, tri: Triangle, tMin: f32, tMax: f32, oldRenderState: R
         tri.corner_a - tri.corner_c
     );
     let denominator: f32 = determinant(system_matrix);
-    if (abs(denominator) < 0.00001) {
-        return vec3<f32>(0, 0, 0);
-    }
+    // if (abs(denominator) < 0.00001) {
+    //     return vec3<f32>(0, 0, 0);
+    // }
 
     system_matrix = mat3x3<f32>(
         ray.direction,
@@ -267,9 +276,9 @@ fn hit_triangle(ray: Ray, tri: Triangle, tMin: f32, tMax: f32, oldRenderState: R
     );
     let u: f32 = determinant(system_matrix) / denominator;
     
-    if (u < 0 || u > 1) {
-        return vec3<f32>(0, 0, 0);
-    }
+    // if (u < 0 || u > 1) {
+    //     return vec3<f32>(0, 0, 0);
+    // }
 
     system_matrix = mat3x3<f32>(
         ray.direction,
@@ -277,9 +286,9 @@ fn hit_triangle(ray: Ray, tri: Triangle, tMin: f32, tMax: f32, oldRenderState: R
         tri.corner_a - ray.origin,
     );
     let v: f32 = determinant(system_matrix) / denominator;
-    if (v < 0.0 || u + v > 1.0) {
-        return vec3<f32>(0, 0, 0);
-    }
+    // if (v < 0.0 || u + v > 1.0) {
+    //     return vec3<f32>(0, 0, 0);
+    // }
 
     system_matrix = mat3x3<f32>(
         tri.corner_a - ray.origin,
