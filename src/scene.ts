@@ -14,21 +14,19 @@ export class Scene{
     nodes: Node[];
     nodesUsed: number = 0;
     triangleIndices: number[];
-    mesh: GLTFMesh;
+    mesh: ObjMesh;
+
 
     constructor(triangleCount: number) {
 
-        //Make GLTFMesh
-        this.mesh = new GLTFMesh();
-
-        this.camera = new Camera([-5.0, 0.0, 0.0]);        
+        this.mesh = new ObjMesh();
+        this.camera = new Camera([-2.5, 0.0, 0.0]);        
     }
 
     async make_scene() {
-        // this.mesh = new GLTFMesh();
-
-        // await this.mesh.initialize([1.0, 1.0, 1.0], "dist/models/man_head.obj");
-        await this.mesh.initialize([1.0, 1.0, 1.0], "dist/models/man_head_2.glb");
+        // await this.mesh.initialize([1.0, 1.0, 1.0], "dist/models/dinosaurs_head.obj");
+        await this.mesh.initialize([1.0, 1.0, 1.0], "dist/models/man_head_2.obj");
+        // await this.mesh.initialize([1.0, 1.0, 1.0], "dist/models/man_head_2.glb");
 
         //TODO: get the triangle data from the loaded model and put
         //it into the triangle list

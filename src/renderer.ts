@@ -242,7 +242,8 @@ export class Renderer {
         await this.sky_material.initialize(this.device, urls);
 
         this.texture_man_head = new Texture2D();
-        await this.texture_man_head.initialize(this.device, "dist/models/man_head.png");
+        // await this.texture_man_head.initialize(this.device, "dist/models/dinosaurs_head_2.png");
+        await this.texture_man_head.initialize(this.device, "dist/models/man_head_2.png");
     }
 
     async makePipeline() {
@@ -499,8 +500,8 @@ export class Renderer {
         this.device.queue.submit([commandEncoder.finish()]);
 
         this.device.queue.onSubmittedWorkDone().then(() => {
-            // this.change_every_frame.innerHTML = "Triangle count: " + this.scene.triangles.length.toFixed(0);
-            this.change_every_frame.innerHTML = '<br />RenderTime: ' + (performance.now() - startTime).toFixed(5) + ' ms';
+            this.change_every_frame.innerHTML = "Triangle count: " + this.scene.triangles.length.toFixed(0);
+            this.change_every_frame.innerHTML += '<br />RenderTime: ' + (performance.now() - startTime).toFixed(5) + ' ms';
         });
 
 

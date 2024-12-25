@@ -81,11 +81,16 @@ fn main(@builtin(global_invocation_id) GlobalInvocationID : vec3<u32>) {
     let right: vec3<f32> = scene.cameraRight;
     let up: vec3<f32> = scene.cameraUp;
 
+    var pixel_color : vec3<f32> = vec3<f32>(0.0, 0.0, 0.0);
     var myRay: Ray;
-    myRay.direction = normalize(forwards + horizontal_coefficient * right + vertical_coefficient * up);
     myRay.origin = scene.cameraPos;
+    for (var i = 0; i < 10; i = i + 1) {
+        let offset = randomOffset(vec2<f32>(GlobalInvocationID.xy) + vec2<f32>(f32(i), f32(i))) * 10;
+        myRay.direction = normalize(forwards + (horizontal_coefficient+offset.x) * right + (vertical_coefficient+offset.y) * up);
 
-    var pixel_color : vec3<f32> = rayColor(myRay);
+        pixel_color += rayColor(myRay);
+    }
+    pixel_color *= 0.1;
 
     textureStore(color_buffer, screen_pos, vec4<f32>(pixel_color, 1.0));
 }
@@ -100,6 +105,7 @@ fn rayColor(ray: Ray) -> vec3<f32> {
     temp_ray.direction = ray.direction;
 
     let bounces: u32 = 1;//u32(scene.maxBounces);
+    let multiply_ratio = 1.0/f32(bounces);
 
     for(var bounce: u32 = 0; bounce < bounces; bounce++) {
         result = trace(temp_ray);
@@ -113,7 +119,7 @@ fn rayColor(ray: Ray) -> vec3<f32> {
         temp_ray.direction = normalize(reflect(temp_ray.direction, result.normal));
     }
 
-    color /= f32(bounces);
+    color *= multiply_ratio;
 
     // if(result.hit) {
     //     color = vec3<f32>(1.0, 1.0, 1.0);
@@ -204,39 +210,16 @@ fn trace(ray: Ray) -> RenderState {
 
     if(!renderState.hit) {
         // For white sky
-        // renderState.color = vec3<f32>(1.0, 1.0, 1.0);
-        renderState.color = textureSampleLevel(skyMaterial, skySampler, ray.direction, 0.0).xyz;   
+        renderState.color = vec3<f32>(1.0, 1.0, 1.0);
+        // renderState.color = textureSampleLevel(skyMaterial, skySampler, ray.direction, 0.0).xyz;   
     }
 
     return renderState;
 }
 
-// fn hit_sphere(ray: Ray, sphere: Sphere, tMin: f32, tMax: f32, oldRenderState: RenderState) -> RenderState {
-//     let co: vec3<f32> = ray.origin - sphere.center;
-//     let a: f32 = dot(ray.direction, ray.direction);
-//     let b: f32 = 2.0 * dot(ray.direction, co);
-//     let c: f32 = dot(co, co) - sphere.radius * sphere.radius;
-//     let discriminant: f32 = b * b - 4.0 * a * c;
-
-//     renderState.color = oldRenderState.color;
-
-//     if(discriminant > 0.0) {
-
-//         let t: f32 = (-b - sqrt(discriminant)) / (2 * a);
-
-//         if(t > tMin && t < tMax) {
-//             renderState.t = t;
-//             renderState.position = ray.origin + t * ray.direction;
-//             renderState.normal = normalize(renderState.position - sphere.center);
-//             renderState.color = sphere.color;
-//             renderState.hit = true;
-//             return renderState;
-//         }
-//     }
-
-//     renderState.hit = false;
-//     return renderState;
-// }
+fn randomOffset(seed: vec2<f32>) -> vec2<f32> {
+    return vec2<f32>(fract(sin(dot(seed, vec2<f32>(12.9898, 78.233))) * 43758.5453));
+}
 
 fn uv_triangle(tri: Triangle, u: f32, v: f32, w: f32) -> vec2<f32> {
     var uv_coord: vec2<f32>;
@@ -335,3 +318,30 @@ fn hit_aabb(ray: Ray, node: Node) -> f32 {
         return t_min;
     }
 }
+
+// fn hit_sphere(ray: Ray, sphere: Sphere, tMin: f32, tMax: f32, oldRenderState: RenderState) -> RenderState {
+//     let co: vec3<f32> = ray.origin - sphere.center;
+//     let a: f32 = dot(ray.direction, ray.direction);
+//     let b: f32 = 2.0 * dot(ray.direction, co);
+//     let c: f32 = dot(co, co) - sphere.radius * sphere.radius;
+//     let discriminant: f32 = b * b - 4.0 * a * c;
+
+//     renderState.color = oldRenderState.color;
+
+//     if(discriminant > 0.0) {
+
+//         let t: f32 = (-b - sqrt(discriminant)) / (2 * a);
+
+//         if(t > tMin && t < tMax) {
+//             renderState.t = t;
+//             renderState.position = ray.origin + t * ray.direction;
+//             renderState.normal = normalize(renderState.position - sphere.center);
+//             renderState.color = sphere.color;
+//             renderState.hit = true;
+//             return renderState;
+//         }
+//     }
+
+//     renderState.hit = false;
+//     return renderState;
+// }
