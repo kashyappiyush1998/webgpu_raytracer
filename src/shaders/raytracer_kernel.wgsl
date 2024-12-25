@@ -8,6 +8,9 @@ struct Triangle {
     corner_a: vec3<f32>,
     corner_b: vec3<f32>,
     corner_c: vec3<f32>,
+    normal_a: vec3<f32>,
+    normal_b: vec3<f32>,
+    normal_c: vec3<f32>,
     color: vec3<f32>,
     corner_a_uv: vec2<f32>,
     corner_b_uv: vec2<f32>,
@@ -36,6 +39,12 @@ struct ObjectIndices {
 struct Ray {
     direction: vec3<f32>,
     origin: vec3<f32>,
+}
+
+struct Light{
+    intentisty: f32,
+    direction: vec3<f32>,
+    color: vec3<f32>,
 }
 
 struct SceneData {
@@ -82,11 +91,11 @@ fn main(@builtin(global_invocation_id) GlobalInvocationID : vec3<u32>) {
     var myRay: Ray;
     myRay.origin = scene.cameraPos;
 
-    let num_samples: f32 = 144.0;
+    let num_samples: f32 = 9.0;
     let width: f32 = sqrt(num_samples);
     let height: f32 = num_samples/width;
-    let each_dist_x: f32 = 1.0/(width-1.0);
-    let each_dist_y: f32 = 1.0/(height-1.0);
+    let each_dist_x: f32 = 1.0/width;
+    let each_dist_y: f32 = 1.0/height;
 
     for(var i: u32 = 0; i < u32(width); i++){
         for(var j: u32 = 0; j < u32(height); j++){
@@ -143,10 +152,14 @@ fn trace(ray: Ray) -> RenderState {
     renderState.hit = false;
     var nearestHit: f32 = 9999;
 
-
     var node: Node = tree.nodes[0];
     var stack: array<Node, 15>;
     var stackLocation: u32 = 0;
+
+    var light: Light;
+    light.intentisty = 1.0;
+    light.direction = scene.cameraForwards;
+    light.color = vec3<f32>(1.0, 1.0, 1.0);
 
     while(true) {
 
@@ -199,12 +212,19 @@ fn trace(ray: Ray) -> RenderState {
                 var w: f32 = barycentric_coordinates[2];
 
                 if(newRenderState.hit){
-                    var uv_coords: vec2<f32> = uv_triangle(objects.triangles[u32(triangleLookup.primitiveIndices[i + contents])], u, v, w);
-                    var color: vec4<f32> = textureSampleLevel(texture, textureSampler, uv_coords, 0.0);
-                    nearestHit = newRenderState.t;
-                    renderState = newRenderState;
-                    // renderState.color = vec3<f32>(uv_coords.x, uv_coords.y, 0.0);
-                    renderState.color = color.xyz;
+                    if (u >= 0.0 && v >= 0.0 && w >= 0.0 && (u + v + w) <= 1.0) {
+                        var uv_coords: vec2<f32> = uv_triangle(objects.triangles[u32(triangleLookup.primitiveIndices[i + contents])], u, v, w);
+                        var interpolatedNormal: vec3<f32> = normal_triangle(objects.triangles[u32(triangleLookup.primitiveIndices[i + contents])], u, v, w);
+                        var baseColor: vec3<f32> = textureSampleLevel(texture, textureSampler, uv_coords, 0.0).xyz;
+                        // var diffuse: f32 = max(dot(interpolatedNormal, normalize(light.direction)), 0.0);
+                        var diffuse: f32 = max(dot(-1 * interpolatedNormal, normalize(light.direction)), 0.0);
+            
+                        nearestHit = newRenderState.t;
+                        renderState = newRenderState;
+                        // renderState.color = vec3<f32>(uv_coords.x, uv_coords.y, 0.0);
+                        // renderState.color = interpolatedNormal;
+                        renderState.color = diffuse * baseColor;
+                    }
                 }
             }
             if(stackLocation ==0 ) {
@@ -236,6 +256,12 @@ fn uv_triangle(tri: Triangle, u: f32, v: f32, w: f32) -> vec2<f32> {
     return uv_coord;
 }
 
+fn normal_triangle(tri: Triangle, u: f32, v: f32, w: f32) -> vec3<f32> {
+    var normal: vec3<f32>;
+    normal = normalize(u * tri.normal_a + v * tri.normal_b + w * tri.normal_c); 
+    return normal;
+}
+
 fn hit_triangle(ray: Ray, tri: Triangle, tMin: f32, tMax: f32, oldRenderState: RenderState, newRenderState: ptr<function, RenderState>) -> vec3<f32> {
     
     //Set up a blank renderstate,
@@ -265,9 +291,9 @@ fn hit_triangle(ray: Ray, tri: Triangle, tMin: f32, tMax: f32, oldRenderState: R
         tri.corner_a - tri.corner_c
     );
     let denominator: f32 = determinant(system_matrix);
-    // if (abs(denominator) < 0.00001) {
-    //     return vec3<f32>(0, 0, 0);
-    // }
+    if (abs(denominator) < 0.00000001) {
+        return vec3<f32>(1, 1, 1);
+    }
 
     system_matrix = mat3x3<f32>(
         ray.direction,
@@ -301,7 +327,7 @@ fn hit_triangle(ray: Ray, tri: Triangle, tMin: f32, tMax: f32, oldRenderState: R
 
         newRenderState.position = ray.origin + t * ray.direction;
         newRenderState.normal = n;
-        newRenderState.color = tri.color;
+        // newRenderState.color = tri.color;
         newRenderState.t = t;
         newRenderState.hit = true;
         return vec3<f32>(u, v, 1-u-v);
@@ -327,30 +353,3 @@ fn hit_aabb(ray: Ray, node: Node) -> f32 {
         return t_min;
     }
 }
-
-// fn hit_sphere(ray: Ray, sphere: Sphere, tMin: f32, tMax: f32, oldRenderState: RenderState) -> RenderState {
-//     let co: vec3<f32> = ray.origin - sphere.center;
-//     let a: f32 = dot(ray.direction, ray.direction);
-//     let b: f32 = 2.0 * dot(ray.direction, co);
-//     let c: f32 = dot(co, co) - sphere.radius * sphere.radius;
-//     let discriminant: f32 = b * b - 4.0 * a * c;
-
-//     renderState.color = oldRenderState.color;
-
-//     if(discriminant > 0.0) {
-
-//         let t: f32 = (-b - sqrt(discriminant)) / (2 * a);
-
-//         if(t > tMin && t < tMax) {
-//             renderState.t = t;
-//             renderState.position = ray.origin + t * ray.direction;
-//             renderState.normal = normalize(renderState.position - sphere.center);
-//             renderState.color = sphere.color;
-//             renderState.hit = true;
-//             return renderState;
-//         }
-//     }
-
-//     renderState.hit = false;
-//     return renderState;
-// }

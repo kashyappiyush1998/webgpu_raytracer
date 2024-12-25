@@ -11,6 +11,7 @@ export class Triangle {
     constructor() {
         this.corners = [];
         this.uv = [];
+        this.normal = [];
     }
 
     build_from_center_and_offsets(center: vec3, offsets: vec3[], color: vec3) {

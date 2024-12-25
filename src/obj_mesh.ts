@@ -109,10 +109,13 @@ export class ObjMesh {
             var tri: Triangle = new Triangle();
             tri.corners.push(this.read_corner_vertex(vertex_descriptions[1], result));
             tri.uv.push(this.read_corner_tex_coord(vertex_descriptions[1], result));
+            tri.normal.push(this.read_corner_normal(vertex_descriptions[1], result));
             tri.corners.push(this.read_corner_vertex(vertex_descriptions[2 + i], result));
-            tri.uv.push(this.read_corner_tex_coord(vertex_descriptions[1], result));
+            tri.uv.push(this.read_corner_tex_coord(vertex_descriptions[2 + i], result));
+            tri.normal.push(this.read_corner_normal(vertex_descriptions[2 + i], result));
             tri.corners.push(this.read_corner_vertex(vertex_descriptions[3 + i], result));
-            tri.uv.push(this.read_corner_tex_coord(vertex_descriptions[1], result));
+            tri.uv.push(this.read_corner_tex_coord(vertex_descriptions[3 + i], result));
+            tri.normal.push(this.read_corner_normal(vertex_descriptions[3 + i], result));
             tri.color = this.color;
             tri.make_centroid();
             this.triangles.push(tri);

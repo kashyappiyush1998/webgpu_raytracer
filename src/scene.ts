@@ -20,7 +20,7 @@ export class Scene{
     constructor(triangleCount: number) {
 
         this.mesh = new ObjMesh();
-        this.camera = new Camera([-2.5, 0.0, 0.0]);        
+        this.camera = new Camera([-1.5, 0.0, 0.0]);        
     }
 
     async make_scene() {
