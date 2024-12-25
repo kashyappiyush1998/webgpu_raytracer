@@ -222,8 +222,8 @@ fn trace(ray: Ray) -> RenderState {
                         nearestHit = newRenderState.t;
                         renderState = newRenderState;
                         // renderState.color = vec3<f32>(uv_coords.x, uv_coords.y, 0.0);
-                        // renderState.color = interpolatedNormal;
-                        renderState.color = diffuse * baseColor;
+                        renderState.color = interpolatedNormal * 0.5 + 0.5;
+                        // renderState.color = diffuse * baseColor;
                     }
                 }
             }
@@ -252,13 +252,14 @@ fn randomOffset(seed: vec2<f32>) -> vec2<f32> {
 
 fn uv_triangle(tri: Triangle, u: f32, v: f32, w: f32) -> vec2<f32> {
     var uv_coord: vec2<f32>;
-    uv_coord = u * tri.corner_a_uv + v * tri.corner_b_uv + w * tri.corner_c_uv; 
+    // uv_coord = u * tri.corner_a_uv + v * tri.corner_b_uv + w * tri.corner_c_uv; 
+    uv_coord = w * tri.corner_a_uv + u * tri.corner_b_uv + v * tri.corner_c_uv; 
     return uv_coord;
 }
 
 fn normal_triangle(tri: Triangle, u: f32, v: f32, w: f32) -> vec3<f32> {
     var normal: vec3<f32>;
-    normal = normalize(u * tri.normal_a + v * tri.normal_b + w * tri.normal_c); 
+    normal = normalize(w * tri.normal_a + u * tri.normal_b + v * tri.normal_c); 
     return normal;
 }
 
