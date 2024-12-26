@@ -4,7 +4,7 @@ html, body {
   }
   canvas {
     display: block;  /* make the canvas act like a block   */
-
+    text-align: center;
   }
   #display-values {
     position: absolute;
