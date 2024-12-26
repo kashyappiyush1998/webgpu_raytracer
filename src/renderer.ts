@@ -5,6 +5,7 @@ import { node } from "webpack";
 import { CubeMapMaterial } from "./cube_material";
 import { Texture2D } from "./texture";
 import $ from "jquery";
+import { Canvas, FabricImage } from "fabric/*";
 
 export class Renderer {
 
@@ -117,7 +118,7 @@ export class Renderer {
     }
 
     async loadDefaultTexture(){
-        await this.inputTexture.getBlob(this.device, "dist/models/man_head_2.png");
+        await this.inputTexture.getBlob(this.device, "dist/models/man_head.png");
     }
 
     async Initialize() {

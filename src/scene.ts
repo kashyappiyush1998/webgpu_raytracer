@@ -60,8 +60,6 @@ export class Scene{
         await this.mesh.initialize([1.0, 1.0, 1.0]);
         // await this.mesh.initialize([1.0, 1.0, 1.0], "dist/models/man_head_2.glb");
 
-        //TODO: get the triangle data from the loaded model and put
-        //it into the triangle list
         this.triangles = [];
         this.mesh.triangles.forEach(
             (tri) => {

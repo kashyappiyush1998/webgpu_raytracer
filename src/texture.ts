@@ -4,6 +4,7 @@ export class Texture2D {
     view: GPUTextureView
     sampler: GPUSampler
     blob: Blob
+    imageData: ImageBitmap;
 
     async getBlob(device: GPUDevice, url: string) {
         const response: Response = await fetch(url);
@@ -12,12 +13,12 @@ export class Texture2D {
     }
 
     async initialize(device: GPUDevice, blob: Blob) {
-
-        var imageData: ImageBitmap;
+        this.imageData = await createImageBitmap(blob);
         
-        imageData = await createImageBitmap(blob);
+        await this.loadImageBitmap(device);
+        await this.flipImageBitmapY();
 
-        await this.loadImageBitmap(device, imageData);
+        this.copyTexture(device);
 
         const viewDescriptor: GPUTextureViewDescriptor = {
             format: "rgba8unorm",
@@ -42,15 +43,13 @@ export class Texture2D {
         
     }
 
-    async loadImageBitmap(
-        device: GPUDevice, 
-        imageData: ImageBitmap) {
+    async loadImageBitmap(device: GPUDevice) {
 
         const textureDescriptor: GPUTextureDescriptor = {
             dimension: "2d",
             size: {
-                width: imageData.width,
-                height: imageData.height,
+                width: this.imageData.width,
+                height: this.imageData.height,
                 depthOrArrayLayers: 1
             },
             format: "rgba8unorm",
@@ -58,11 +57,35 @@ export class Texture2D {
         };
 
         this.texture = device.createTexture(textureDescriptor);
+    }
 
+    copyTexture(device: GPUDevice) {
         device.queue.copyExternalImageToTexture(
-            {source: imageData},
+            {source: this.imageData},
             {texture: this.texture, origin: [0, 0, 0]},
-            [imageData.width, imageData.height]
+            [this.imageData.width, this.imageData.height]
         );
+    }
+
+    async flipImageBitmapY() {
+        const canvas = document.createElement("canvas");
+        const ctx = canvas.getContext("2d");
+    
+        if (!ctx) {
+            throw new Error("Canvas 2D context not available.");
+        }
+    
+        // Set canvas size to match the ImageBitmap dimensions
+        canvas.width = this.imageData.width;
+        canvas.height = this.imageData.height;
+    
+        // Flip the image vertically
+        ctx.drawImage(this.imageData, 0, 0);
+        ctx.scale(1, -1); // Scale vertically
+        ctx.translate(0, -canvas.height); // Translate back into view
+        ctx.drawImage(this.imageData, 0, 0); // Draw the flipped image
+    
+        // Create a new ImageBitmap from the canvas
+        this.imageData = await createImageBitmap(canvas);
     }
 }

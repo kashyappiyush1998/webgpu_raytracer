@@ -18,6 +18,7 @@
     "@types/jquery": "^3.5.32",
     "@types/node": "^20.8.9",
     "@webgpu/types": "^0.1.38",
+    "fabric": "^6.5.3",
     "gl-matrix": "^3.4.3",
     "jquery": "^3.7.1",
     "live-server": "^1.2.2",
