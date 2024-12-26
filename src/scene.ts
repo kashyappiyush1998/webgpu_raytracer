@@ -17,9 +17,8 @@ export class Scene{
     mesh: ObjMesh;
 
 
-    constructor(triangleCount: number) {
-
-        this.mesh = new ObjMesh();
+    constructor(fileContent: string) {
+        this.mesh = new ObjMesh(fileContent);
         this.camera = new Camera([-2.5, 0.0, 0.0], 0, 0);        
     }
 
@@ -58,7 +57,7 @@ export class Scene{
 
     async make_scene() {
         // await this.mesh.initialize([1.0, 1.0, 1.0], "dist/models/dinosaurs_head.obj");
-        await this.mesh.initialize([1.0, 1.0, 1.0], "dist/models/man_head_2.obj");
+        await this.mesh.initialize([1.0, 1.0, 1.0]);
         // await this.mesh.initialize([1.0, 1.0, 1.0], "dist/models/man_head_2.glb");
 
         //TODO: get the triangle data from the loaded model and put

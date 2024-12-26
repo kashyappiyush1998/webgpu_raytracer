@@ -9,6 +9,9 @@ import $ from "jquery";
 export class Renderer {
 
     canvas: HTMLCanvasElement;
+    scene: Scene;
+    inputObj: File;
+    inputTexture: Texture2D;
     change_every_frame: HTMLPreElement;
     change_every_second: HTMLPreElement;
     passedTime: number;
@@ -29,7 +32,7 @@ export class Renderer {
     nodeBuffer: GPUBuffer;
     triangleIndexBuffer: GPUBuffer;
     sky_material: CubeMapMaterial;
-    texture_man_head: Texture2D;
+    // texture_man_head: Texture2D;
 
     // Pipeline objects
     ray_tracing_pipeline: GPUComputePipeline;
@@ -37,10 +40,7 @@ export class Renderer {
     ray_tracing_bind_group_layout: GPUBindGroupLayout;
     screen_pipeline: GPURenderPipeline;
     screen_bind_group: GPUBindGroup;
-    screen_bind_group_layout: GPUBindGroupLayout;
-
-    //Scene to Render
-    scene: Scene;
+    screen_bind_group_layout: GPUBindGroupLayout;    
 
     //Labels for displaying state
     keyLabel: HTMLElement;
@@ -52,7 +52,7 @@ export class Renderer {
     up_amount: number;
 
 
-    constructor(canvas: HTMLCanvasElement, change_every_frame: HTMLPreElement, change_every_second: HTMLPreElement, scene: Scene){
+    constructor(canvas: HTMLCanvasElement, scene: Scene, inputElement: HTMLInputElement, change_every_frame: HTMLPreElement, change_every_second: HTMLPreElement){
         this.canvas = canvas;
         this.change_every_frame = change_every_frame;
         this.change_every_second = change_every_second;
@@ -67,6 +67,30 @@ export class Renderer {
         this.forwards_amount = 0;
         this.right_amount = 0;
         this.up_amount = 0;
+
+        this.inputTexture = new Texture2D();
+
+        inputElement.addEventListener("change", async (ev) =>{
+            var inputFiles = (<HTMLInputElement>ev.target).files;
+            if(inputFiles!=null){
+                for(var inputFileIndex = 0; inputFileIndex < inputFiles.length.valueOf(); inputFileIndex++){
+                    var inputFile = inputFiles[inputFileIndex];
+                    if(inputFile.name.endsWith(".obj")) {
+                        console.log(inputFile)
+                        var objText = await inputFile.text();
+                        this.scene = new Scene(objText.toString());
+                        this.scene.make_scene();
+                    }
+                    if(inputFile.type.includes("image")) {
+                        console.log(inputFile)
+                        this.inputTexture = new Texture2D();
+                        this.inputTexture.initialize(this.device, inputFile);
+                    }
+                }
+                await this.Initialize();
+            }
+        });
+
 
         $(document).on(
             "keydown", 
@@ -92,9 +116,11 @@ export class Renderer {
         );
     }
 
-   async Initialize() {
+    async loadDefaultTexture(){
+        await this.inputTexture.getBlob(this.device, "dist/models/man_head_2.png");
+    }
 
-        await this.setupDevice();
+    async Initialize() {
 
         await this.makeBindGroupLayouts();
 
@@ -281,17 +307,9 @@ export class Renderer {
         ]
         this.sky_material = new CubeMapMaterial();
         await this.sky_material.initialize(this.device, urls);
-
-        this.texture_man_head = new Texture2D();
-        // await this.texture_man_head.initialize(this.device, "dist/models/dinosaurs_head_2.png");
-        await this.texture_man_head.initialize(this.device, "dist/models/man_head_2.png");
     }
 
     async makePipeline() {
-
-        
-    
-        
         
         const ray_tracing_pipeline_layout = this.device.createPipelineLayout({
             bindGroupLayouts: [this.ray_tracing_bind_group_layout]
@@ -383,11 +401,11 @@ export class Renderer {
                 },
                 {
                     binding: 7,
-                    resource: this.texture_man_head.view
+                    resource: this.inputTexture.view
                 },
                 {
                     binding: 8,
-                    resource: this.texture_man_head.sampler
+                    resource: this.inputTexture.sampler
                 },
             ]
         });
@@ -570,58 +588,58 @@ export class Renderer {
     }
 
     handle_keypress(event: JQuery.KeyDownEvent) {
-        this.keyLabel.innerText = event.code;
+        // this.keyLabel.innerText = event.code;
 
-        if (event.code == "KeyW") {
-            this.forwards_amount = 0.02;
-        }
-        if (event.code == "KeyS") {
-            this.forwards_amount = -0.02;
-        }
-        if (event.code == "KeyA") {
-            this.right_amount = -0.02;
-        }
-        if (event.code == "KeyD") {
-            this.right_amount = 0.02;
-        }
-        if (event.code == "KeyX") {
-            this.up_amount = 0.02;
-        }
-        if (event.code == "KeyZ") {
-            this.up_amount = -0.02;
-        }
+        // if (event.code == "KeyW") {
+        //     this.forwards_amount = 0.02;
+        // }
+        // if (event.code == "KeyS") {
+        //     this.forwards_amount = -0.02;
+        // }
+        // if (event.code == "KeyA") {
+        //     this.right_amount = -0.02;
+        // }
+        // if (event.code == "KeyD") {
+        //     this.right_amount = 0.02;
+        // }
+        // if (event.code == "KeyX") {
+        //     this.up_amount = 0.02;
+        // }
+        // if (event.code == "KeyZ") {
+        //     this.up_amount = -0.02;
+        // }
 
     }
 
     handle_keyrelease(event: JQuery.KeyUpEvent) {
-        this.keyLabel.innerText = event.code;
+        // this.keyLabel.innerText = event.code;
 
-        if (event.code == "KeyW") {
-            this.forwards_amount = 0;
-        }
-        if (event.code == "KeyS") {
-            this.forwards_amount = 0;
-        }
-        if (event.code == "KeyA") {
-            this.right_amount = 0;
-        }
-        if (event.code == "KeyD") {
-            this.right_amount = 0;
-        }
-        if (event.code == "KeyX") {
-            this.up_amount = 0;
-        }
-        if (event.code == "KeyZ") {
-            this.up_amount = 0;
-        }
+        // if (event.code == "KeyW") {
+        //     this.forwards_amount = 0;
+        // }
+        // if (event.code == "KeyS") {
+        //     this.forwards_amount = 0;
+        // }
+        // if (event.code == "KeyA") {
+        //     this.right_amount = 0;
+        // }
+        // if (event.code == "KeyD") {
+        //     this.right_amount = 0;
+        // }
+        // if (event.code == "KeyX") {
+        //     this.up_amount = 0;
+        // }
+        // if (event.code == "KeyZ") {
+        //     this.up_amount = 0;
+        // }
     }
 
     handle_mouse_move(event: MouseEvent) {
-        this.mouseXLabel.innerText = event.clientX.toString();
-        this.mouseYLabel.innerText = event.clientY.toString();
+        // this.mouseXLabel.innerText = event.clientX.toString();
+        // this.mouseYLabel.innerText = event.clientY.toString();
         
-        this.scene.spin_camera(
-            event.movementX / 5, event.movementY / 5
-        );
+        // this.scene.spin_camera(
+        //     event.movementX / 5, event.movementY / 5
+        // );
     }
 }

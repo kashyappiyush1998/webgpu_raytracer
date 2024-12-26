@@ -3,15 +3,18 @@ export class Texture2D {
     texture: GPUTexture
     view: GPUTextureView
     sampler: GPUSampler
+    blob: Blob
 
-    async initialize(
-        device: GPUDevice, 
-        url: string) {
+    async getBlob(device: GPUDevice, url: string) {
+        const response: Response = await fetch(url);
+        this.blob = await response.blob();
+        await this.initialize(device, this.blob);
+    }
+
+    async initialize(device: GPUDevice, blob: Blob) {
 
         var imageData: ImageBitmap;
-
-        const response: Response = await fetch(url);
-        const blob: Blob = await response.blob();
+        
         imageData = await createImageBitmap(blob);
 
         await this.loadImageBitmap(device, imageData);

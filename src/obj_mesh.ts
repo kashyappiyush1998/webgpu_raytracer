@@ -1,5 +1,6 @@
 import { vec3, vec2 } from "gl-matrix";
 import { Triangle } from "./triangle";
+import { Texture2D } from "./texture";
 
 export class ObjMesh {
 
@@ -7,11 +8,14 @@ export class ObjMesh {
     vt: vec2[]
     vn: vec3[]
 
+    fileContents: string;
     triangles: Triangle[]
     color: vec3
+    tex: Texture2D;
 
-    constructor() {
+    constructor(fileContents: string) {
 
+        this.fileContents = fileContents;
         this.v = [];
         this.vt = [];
         this.vn = [];
@@ -19,20 +23,27 @@ export class ObjMesh {
         this.triangles = [];
     }
 
-    async initialize(color: vec3, url: string) {
-
+    async initialize(color: vec3) {
         this.color = color;
-        await this.readFile(url);
-
+        if(this.fileContents.endsWith('.obj')){
+            await this.readText(this.fileContents);
+        }
+        else {
+            this.readFile(this.fileContents);
+        }
     }
 
-    async readFile(url: string) {
-
-        var result: number[] = [];
-
+    async readText(url: string) {
         const response: Response = await fetch(url);
         const blob: Blob = await response.blob();
-        const file_contents = (await blob.text())
+        const file_contents = (await blob.text());
+        this.readFile(file_contents);
+    }
+
+
+    async readFile(file_contents: string) {
+
+        var result: number[] = [];
         const lines = file_contents.split("\n");
 
         lines.forEach(
