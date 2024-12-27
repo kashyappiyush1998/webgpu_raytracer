@@ -67,12 +67,21 @@ struct RenderState {
 
 const epsilon: f32 = 0.00000001;
 
-fn hash(p: vec2<f32>) -> f32 {
-    return fract(sin(dot(p, vec2<f32>(127.1, 311.7))) * 43758.5453123);
+fn hash2D(p: vec2<f32>) -> vec2<f32> {
+    let rand_hash: vec2<f32> = vec2<f32>(fract(sin(dot(p, vec2<f32>(127.1, 311.7))) * 43758.5453123) * 2.0 - 1.0,
+                                fract(sin(dot(p + vec2<f32>(1.0, 1.0), vec2<f32>(127.1, 311.7))) * 43758.5453123) * 2.0 - 1.0);
+    return rand_hash;
+}
+
+fn random3D(p: vec3<f32>) -> vec3<f32> {
+    let rand_3d: vec3<f32> = vec3<f32>((fract(sin(dot(p, vec3<f32>(127.1, 311.7, 415.57))) * 43758.5453123) * 2.0 - 1.0),
+                                        (fract(sin(dot(p + vec3<f32>(1.0, 1.0, 1.0), vec3<f32>(127.1, 311.7, 415.57))) * 43758.5453123) * 2.0 - 1.0),
+                                        (fract(sin(dot(p + vec3<f32>(2.0, 2.0, 2.0), vec3<f32>(127.1, 311.7, 415.57))) * 43758.5453123) * 2.0 - 1.0));
+    return rand_3d * rand_3d;
 }
 
 fn random2D(seed: vec2<f32>) -> vec2<f32> {
-    return vec2<f32>(hash(seed), hash(seed + vec2<f32>(1.0, 1.0)));
+    return hash2D(seed);
 }
 
 fn randomHemisphereDirection(normal: vec3<f32>, rand: vec2<f32>) -> vec3<f32> {
@@ -91,7 +100,7 @@ fn randomHemisphereDirection(normal: vec3<f32>, rand: vec2<f32>) -> vec3<f32> {
 fn roughReflection(incident: vec3<f32>, normal: vec3<f32>, roughness: f32, rand: vec2<f32>) -> vec3<f32> {
     let perfectReflection: vec3<f32> = reflect(incident, normal);
     let randomDir: vec3<f32> = randomHemisphereDirection(perfectReflection, rand);
-    return normalize(mix(perfectReflection, randomDir, roughness));
+    return normalize((perfectReflection + randomDir) * roughness);
 }
 
 @group(0) @binding(0) var color_buffer: texture_storage_2d<rgba8unorm, write>;
@@ -121,7 +130,7 @@ fn main(@builtin(global_invocation_id) GlobalInvocationID : vec3<u32>) {
     var myRay: Ray;
     myRay.origin = scene.cameraPos;
 
-    let num_samples: f32 = 1.0;
+    let num_samples: f32 = 9.0;
     let width: f32 = sqrt(num_samples);
     let height: f32 = num_samples/width;
     let each_dist_x: f32 = 1.0/width;
@@ -129,7 +138,6 @@ fn main(@builtin(global_invocation_id) GlobalInvocationID : vec3<u32>) {
 
     for(var i: u32 = 0; i < u32(width); i++){
         for(var j: u32 = 0; j < u32(height); j++){
-            
             let horizontal_coefficient: f32 = (f32(screen_pos.x) + each_dist_x * f32(i) - f32(screen_size.x) / 2) / f32(screen_size.x);
             let vertical_coefficient: f32 = (f32(screen_pos.y) + each_dist_y * f32(j) - f32(screen_size.y) / 2) / f32(screen_size.x);
 
@@ -152,9 +160,9 @@ fn rayColor(ray: Ray) -> vec3<f32> {
     temp_ray.origin = ray.origin;
     temp_ray.direction = ray.direction;
 
-    let bounces: u32 = 10;//u32(scene.maxBounces);
+    let bounces: u32 = 20;//u32(scene.maxBounces);
     let multiply_ratio = 1.0/f32(bounces);
-
+    let roughness: f32 = 0.9;
     var count: u32 = 0;
     for(var bounce: u32 = 0; bounce < bounces; bounce++) {
         count += 1;
@@ -166,14 +174,14 @@ fn rayColor(ray: Ray) -> vec3<f32> {
         }
 
         temp_ray.origin = result.position;
-        temp_ray.direction = normalize(reflect(temp_ray.direction, result.normal));
-        // temp_ray.direction = roughReflection(temp_ray.direction, result.normal, 0.5, result.uv_coords);
+        temp_ray.direction = normalize(reflect(temp_ray.direction, result.normal + random3D(result.normal) * roughness));
+        // temp_ray.direction = roughReflection(temp_ray.direction, result.normal, 1.0, result.uv_coords);
     }
 
     // color = color/f32(count);
 
     if(result.hit) {
-        color = vec3<f32>(1.0, 1.0, 1.0);
+        color = vec3<f32>(0.0, 0.0, 0.0);
     }
 
     return color;
@@ -183,7 +191,8 @@ fn trace(ray: Ray) -> RenderState {
 
     var renderState: RenderState;
     renderState.hit = false;
-    var nearestHit: f32 = 9999;
+    renderState.color = vec3<f32>(1.0, 1.0, 1.0);
+    var nearestHit: f32 = 9999999;
 
     var node: Node = tree.nodes[0];
     var stack: array<Node, 15>;
@@ -246,8 +255,9 @@ fn trace(ray: Ray) -> RenderState {
 
                 if(newRenderState.hit){
                     if (u >= 0.0 && v >= 0.0 && w >= 0.0 && (u + v + w) <= 1.0) {
-                        var uv_coords: vec2<f32> = uv_triangle(objects.triangles[u32(triangleLookup.primitiveIndices[i + contents])], u, v, w);
-                        var interpolatedNormal: vec3<f32> = normal_triangle(objects.triangles[u32(triangleLookup.primitiveIndices[i + contents])], u, v, w);
+                        var tri: Triangle = objects.triangles[u32(triangleLookup.primitiveIndices[i + contents])];
+                        var uv_coords: vec2<f32> = w * tri.corner_a_uv + u * tri.corner_b_uv + v * tri.corner_c_uv;
+                        var interpolatedNormal: vec3<f32> = normalize(w * tri.normal_a + u * tri.normal_b + v * tri.normal_c);
                         var baseColor: vec3<f32> = textureSampleLevel(texture, textureSampler, uv_coords, 0.0).xyz;
                         // var diffuse: f32 = max(dot(interpolatedNormal, normalize(light.direction)), 0.0);
                         var diffuse: f32 = max(dot(-1 * interpolatedNormal, normalize(light.direction)), 0.0);
@@ -258,6 +268,7 @@ fn trace(ray: Ray) -> RenderState {
                         renderState.uv_coords = uv_coords;
                         // renderState.color = vec3<f32>(uv_coords.x, uv_coords.y, 0.0);
                         // renderState.color = interpolatedNormal * 0.5 + 0.5;
+                        // renderState.color = vec3<f32>(1.0, 0.84, 0.0);
                         renderState.color = diffuse * baseColor;
                         // renderState.color = random2D(uv_coords);
                     }
@@ -275,28 +286,11 @@ fn trace(ray: Ray) -> RenderState {
 
     if(!renderState.hit) {
         // For white sky
-        // renderState.color = vec3<f32>(1.0, 1.0, 1.0);
-        renderState.color = textureSampleLevel(skyMaterial, skySampler, ray.direction, 0.0).xyz;   
+        renderState.color = vec3<f32>(1.0, 1.0, 1.0);
+        // renderState.color = textureSampleLevel(skyMaterial, skySampler, ray.direction, 0.0).xyz;   
     }
 
     return renderState;
-}
-
-fn randomOffset(seed: vec2<f32>) -> vec2<f32> {
-    return vec2<f32>(fract(sin(dot(seed, vec2<f32>(12.9898, 78.233))) * 43758.5453));
-}
-
-fn uv_triangle(tri: Triangle, u: f32, v: f32, w: f32) -> vec2<f32> {
-    var uv_coord: vec2<f32>;
-    // uv_coord = u * tri.corner_a_uv + v * tri.corner_b_uv + w * tri.corner_c_uv; 
-    uv_coord = w * tri.corner_a_uv + u * tri.corner_b_uv + v * tri.corner_c_uv; 
-    return uv_coord;
-}
-
-fn normal_triangle(tri: Triangle, u: f32, v: f32, w: f32) -> vec3<f32> {
-    var normal: vec3<f32>;
-    normal = normalize(w * tri.normal_a + u * tri.normal_b + v * tri.normal_c); 
-    return normal;
 }
 
 fn hit_triangle(ray: Ray, tri: Triangle, tMin: f32, tMax: f32, oldRenderState: RenderState, newRenderState: ptr<function, RenderState>) -> vec3<f32> {
@@ -318,8 +312,8 @@ fn hit_triangle(ray: Ray, tri: Triangle, tMin: f32, tMax: f32, oldRenderState: R
         n = n * -1;
     }
     //early exit, ray parallel with triangle surface
-    if (abs(ray_dot_tri) < epsilon) {
-        return vec3<f32>(0, 0, 0);
+    if (abs(ray_dot_tri) < 0.001) {
+        return vec3<f32>(1, 1, 1);
     }
 
     var system_matrix: mat3x3<f32> = mat3x3<f32>(
@@ -363,14 +357,14 @@ fn hit_triangle(ray: Ray, tri: Triangle, tMin: f32, tMax: f32, oldRenderState: R
     if (t > tMin && t < tMax) {
 
         newRenderState.position = ray.origin + t * ray.direction;
-        newRenderState.normal = n;
+        // newRenderState.normal = n;
         // newRenderState.color = tri.color;
         newRenderState.t = t;
         newRenderState.hit = true;
         return vec3<f32>(u, v, 1-u-v);
     }
 
-    return vec3<f32>(u, v, 1-u-v);
+    return vec3<f32>(1, 1, 1);
 }
 
 fn hit_aabb(ray: Ray, node: Node) -> f32 {
@@ -384,7 +378,7 @@ fn hit_aabb(ray: Ray, node: Node) -> f32 {
     var t_max: f32 = min(min(tMax.x, tMax.y), tMax.z);
 
     if (t_min > t_max || t_max < 0) {
-        return 99999;
+        return 9999999;
     }
     else {
         return t_min;
