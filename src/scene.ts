@@ -19,7 +19,7 @@ export class Scene{
 
     constructor(fileContent: string) {
         this.mesh = new ObjMesh(fileContent);
-        this.camera = new Camera([-2.5, 0.0, 0.0], 0, 0);        
+        this.camera = new Camera([-3.0, 0.0, 0.0], 0, 0);        
     }
 
     update() {

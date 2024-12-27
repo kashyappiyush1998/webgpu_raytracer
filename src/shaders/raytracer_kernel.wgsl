@@ -62,6 +62,36 @@ struct RenderState {
     hit: bool,
     position: vec3<f32>,
     normal: vec3<f32>,
+    uv_coords: vec2<f32>,
+}
+
+const epsilon: f32 = 0.00000001;
+
+fn hash(p: vec2<f32>) -> f32 {
+    return fract(sin(dot(p, vec2<f32>(127.1, 311.7))) * 43758.5453123);
+}
+
+fn random2D(seed: vec2<f32>) -> vec2<f32> {
+    return vec2<f32>(hash(seed), hash(seed + vec2<f32>(1.0, 1.0)));
+}
+
+fn randomHemisphereDirection(normal: vec3<f32>, rand: vec2<f32>) -> vec3<f32> {
+    let phi: f32 = 2.0 * 3.14159265359 * rand.x; // Random angle around normal
+    let cosTheta: f32 = sqrt(1.0 - rand.y);      // Bias towards the normal
+    let sinTheta: f32 = sqrt(rand.y);
+
+    let tangent: vec3<f32> = normalize(vec3<f32>(normal.y, normal.z, -normal.x)); // Generate tangent
+    let bitangent: vec3<f32> = cross(normal, tangent);
+
+    return normalize(sinTheta * cos(phi) * tangent +
+                     sinTheta * sin(phi) * bitangent +
+                     cosTheta * normal);
+}
+
+fn roughReflection(incident: vec3<f32>, normal: vec3<f32>, roughness: f32, rand: vec2<f32>) -> vec3<f32> {
+    let perfectReflection: vec3<f32> = reflect(incident, normal);
+    let randomDir: vec3<f32> = randomHemisphereDirection(perfectReflection, rand);
+    return normalize(mix(perfectReflection, randomDir, roughness));
 }
 
 @group(0) @binding(0) var color_buffer: texture_storage_2d<rgba8unorm, write>;
@@ -91,7 +121,7 @@ fn main(@builtin(global_invocation_id) GlobalInvocationID : vec3<u32>) {
     var myRay: Ray;
     myRay.origin = scene.cameraPos;
 
-    let num_samples: f32 = 9.0;
+    let num_samples: f32 = 1.0;
     let width: f32 = sqrt(num_samples);
     let height: f32 = num_samples/width;
     let each_dist_x: f32 = 1.0/width;
@@ -115,19 +145,21 @@ fn main(@builtin(global_invocation_id) GlobalInvocationID : vec3<u32>) {
 
 fn rayColor(ray: Ray) -> vec3<f32> {
 
-    var color: vec3<f32> = vec3<f32>(0.0, 0.0, 0.0);
+    var color: vec3<f32> = vec3<f32>(1.0, 1.0, 1.0);
     var result: RenderState;
 
     var temp_ray: Ray;
     temp_ray.origin = ray.origin;
     temp_ray.direction = ray.direction;
 
-    let bounces: u32 = 1;//u32(scene.maxBounces);
+    let bounces: u32 = 10;//u32(scene.maxBounces);
     let multiply_ratio = 1.0/f32(bounces);
 
+    var count: u32 = 0;
     for(var bounce: u32 = 0; bounce < bounces; bounce++) {
+        count += 1;
         result = trace(temp_ray);
-        color += result.color;
+        color *= result.color;
 
         if(!result.hit){
             break;
@@ -135,13 +167,14 @@ fn rayColor(ray: Ray) -> vec3<f32> {
 
         temp_ray.origin = result.position;
         temp_ray.direction = normalize(reflect(temp_ray.direction, result.normal));
+        // temp_ray.direction = roughReflection(temp_ray.direction, result.normal, 0.5, result.uv_coords);
     }
 
-    color *= multiply_ratio;
+    // color = color/f32(count);
 
-    // if(result.hit) {
-    //     color = vec3<f32>(1.0, 1.0, 1.0);
-    // }
+    if(result.hit) {
+        color = vec3<f32>(1.0, 1.0, 1.0);
+    }
 
     return color;
 }
@@ -221,9 +254,12 @@ fn trace(ray: Ray) -> RenderState {
             
                         nearestHit = newRenderState.t;
                         renderState = newRenderState;
+                        renderState.normal = interpolatedNormal;
+                        renderState.uv_coords = uv_coords;
                         // renderState.color = vec3<f32>(uv_coords.x, uv_coords.y, 0.0);
                         // renderState.color = interpolatedNormal * 0.5 + 0.5;
                         renderState.color = diffuse * baseColor;
+                        // renderState.color = random2D(uv_coords);
                     }
                 }
             }
@@ -239,8 +275,8 @@ fn trace(ray: Ray) -> RenderState {
 
     if(!renderState.hit) {
         // For white sky
-        renderState.color = vec3<f32>(1.0, 1.0, 1.0);
-        // renderState.color = textureSampleLevel(skyMaterial, skySampler, ray.direction, 0.0).xyz;   
+        // renderState.color = vec3<f32>(1.0, 1.0, 1.0);
+        renderState.color = textureSampleLevel(skyMaterial, skySampler, ray.direction, 0.0).xyz;   
     }
 
     return renderState;
@@ -282,7 +318,7 @@ fn hit_triangle(ray: Ray, tri: Triangle, tMin: f32, tMax: f32, oldRenderState: R
         n = n * -1;
     }
     //early exit, ray parallel with triangle surface
-    if (abs(ray_dot_tri) < 0.00001) {
+    if (abs(ray_dot_tri) < epsilon) {
         return vec3<f32>(0, 0, 0);
     }
 
@@ -292,7 +328,7 @@ fn hit_triangle(ray: Ray, tri: Triangle, tMin: f32, tMax: f32, oldRenderState: R
         tri.corner_a - tri.corner_c
     );
     let denominator: f32 = determinant(system_matrix);
-    if (abs(denominator) < 0.00000001) {
+    if (abs(denominator) < epsilon) {
         return vec3<f32>(1, 1, 1);
     }
 

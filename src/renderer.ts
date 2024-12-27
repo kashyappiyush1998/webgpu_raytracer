@@ -102,14 +102,14 @@ export class Renderer {
         this.canvas.onclick = () => {
             this.canvas.requestPointerLock();
         }
-        this.canvas.addEventListener(
-            "mousemove", 
-            (event: MouseEvent) => {this.handle_mouse_move(event);}
-        );
+        // this.canvas.addEventListener(
+        //     "mousemove", 
+        //     (event: MouseEvent) => {this.handle_mouse_move(event);}
+        // );
     }
 
     async loadDefaultTexture(){
-        await this.inputTexture.getBlob(this.device, "dist/models/man_head.png");
+        await this.inputTexture.getBlob(this.device, "dist/models/white_man_head.png");
     }
 
     async Initialize() {

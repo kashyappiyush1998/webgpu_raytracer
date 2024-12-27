@@ -6,7 +6,7 @@ const change_every_frame : HTMLPreElement = <HTMLPreElement> document.getElement
 const change_every_second : HTMLPreElement = <HTMLPreElement> document.getElementById("change-every-second");
 const inputElement: HTMLInputElement = <HTMLInputElement> document.getElementById("input");
 
-const scene: Scene = new Scene("dist/models/man_head_2.obj");
+const scene: Scene = new Scene("dist/models/white_man_head.obj");
 await scene.make_scene();
 
 const renderer = new Renderer(canvas, scene, inputElement, change_every_frame, change_every_second);
