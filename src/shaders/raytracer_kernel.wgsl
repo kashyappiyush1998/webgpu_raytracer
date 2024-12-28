@@ -66,6 +66,59 @@ struct RenderState {
     uv_coords: vec2<f32>,
 }
 
+fn maxVec3(a: vec3<f32>, b: vec3<f32>) -> vec3<f32> {
+    return vec3<f32>(
+        max(a.x, b.x),
+        max(a.y, b.y),
+        max(a.z, b.z)
+    );
+}
+
+fn findMaxInArray(arr: array<vec3<f32>, 9>) -> vec3<f32> {
+    // Initialize the maximum with the first element
+    var maxValue: vec3<f32> = arr[0];
+    
+    // Loop through the array to find the maximum
+    for (var i: u32 = 0; i < 9; i++) {
+        maxValue = maxVec3(maxValue, arr[i]);
+    }
+
+    return maxValue;
+}
+
+
+fn vec3Sum(v: vec3<f32>) -> f32 {
+    return v.x + v.y + v.z;
+}
+
+fn bubbleSortVec3(arr: ptr<function, array<vec3<f32>, 9>>) {
+    let n: u32 = 9;
+    var swapped: bool;
+
+    loop {
+        swapped = false;
+
+        for (var i: u32 = 0u; i < n - 1u; i = i + 1u) {
+            let a: vec3<f32> = (*arr)[i];
+            let b: vec3<f32> = (*arr)[i + 1u];
+            
+            if (vec3Sum(a) > vec3Sum(b)) {
+                // Swap the elements
+                (*arr)[i] = b;
+                (*arr)[i + 1u] = a;
+                swapped = true;
+            }
+        }
+
+        // Exit the loop if no swaps occurred
+        if (!swapped) {
+            break;
+        }
+    }
+}
+
+
+
 const epsilon: f32 = 0.00000001;
 
 
@@ -128,10 +181,11 @@ fn main(@builtin(global_invocation_id) GlobalInvocationID : vec3<u32>) {
     var myRay: Ray;
     myRay.origin = scene.cameraPos;
 
-    let num_samples: f32 = 128.0;
+    let num_samples: f32 = 16.0;
     let width: f32 = sqrt(num_samples);
     let height: f32 = num_samples/width;
     var rand_dist: vec2<f32>;
+    var color_array: array<vec3<f32>, 9>;
 
     for(var i: u32 = 0; i < u32(width); i++){
         for(var j: u32 = 0; j < u32(height); j++){
@@ -140,10 +194,15 @@ fn main(@builtin(global_invocation_id) GlobalInvocationID : vec3<u32>) {
             let vertical_coefficient: f32 = (f32(screen_pos.y) + rand_dist.y - f32(screen_size.y) / 2) / f32(screen_size.x);
 
             myRay.direction = normalize(forwards + horizontal_coefficient * right + vertical_coefficient * up);
-            pixel_color += rayColor(myRay);
-
+            var color: vec3<f32> = rayColor(myRay);
+            pixel_color += color;
+            // color_array[i * u32(width) + j] = color;
         }
     } 
+
+    // Median filtering
+    // bubbleSortVec3(&color_array);
+    // pixel_color = color_array[7];
     pixel_color /= num_samples;
 
     textureStore(color_buffer, screen_pos, vec4<f32>(pixel_color, 1.0));
@@ -159,7 +218,7 @@ fn rayColor(ray: Ray) -> vec3<f32> {
     temp_ray.direction = ray.direction;
 
     let bounces: u32 = 5;//u32(scene.maxBounces);
-    let roughness: f32 = 0.9;
+    let roughness: f32 = 0.7;
     var count: u32 = 0;
     for(var bounce: u32 = 0; bounce < bounces; bounce++) {
         count += 1;

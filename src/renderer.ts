@@ -106,6 +106,17 @@ export class Renderer {
         //     "mousemove", 
         //     (event: MouseEvent) => {this.handle_mouse_move(event);}
         // );
+        const buttonDownloadElement: HTMLButtonElement = <HTMLButtonElement> document.getElementById("download_canvas");
+        buttonDownloadElement.addEventListener('click', function(e) {
+            let canvasUrl = canvas.toDataURL();
+            const createEl = document.createElement('a');
+            createEl.href = canvasUrl;
+        
+            createEl.download = "frame_render.png";
+        
+            createEl.click();
+            createEl.remove();
+        });
     }
 
     async loadDefaultTexture(){
@@ -525,7 +536,6 @@ export class Renderer {
 
         this.prepareScene();
 
-
         const commandEncoder : GPUCommandEncoder = this.device.createCommandEncoder();
 
         const ray_trace_pass : GPUComputePassEncoder = commandEncoder.beginComputePass();
@@ -535,9 +545,6 @@ export class Renderer {
             Math.floor((this.canvas.width + 7) / 8), 
             Math.floor((this.canvas.height + 7) / 8), 1);
         ray_trace_pass.end();
-
-        
-
 
         const textureView : GPUTextureView = this.context.getCurrentTexture().createView();
         const renderpass : GPURenderPassEncoder = commandEncoder.beginRenderPass({
