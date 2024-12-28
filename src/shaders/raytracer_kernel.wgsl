@@ -42,7 +42,8 @@ struct Ray {
 }
 
 struct Light{
-    intentisty: f32,
+    ambientIntensity: f32,
+    diffuseIntensity: f32,
     direction: vec3<f32>,
     color: vec3<f32>,
 }
@@ -67,11 +68,6 @@ struct RenderState {
 
 const epsilon: f32 = 0.00000001;
 
-fn hash2D(p: vec2<f32>) -> vec2<f32> {
-    let rand_hash: vec2<f32> = vec2<f32>(fract(sin(dot(p, vec2<f32>(127.1, 311.7))) * 43758.5453123) * 2.0 - 1.0,
-                                fract(sin(dot(p + vec2<f32>(1.0, 1.0), vec2<f32>(127.1, 311.7))) * 43758.5453123) * 2.0 - 1.0);
-    return rand_hash;
-}
 
 fn random3D(p: vec3<f32>) -> vec3<f32> {
     let rand_3d: vec3<f32> = vec3<f32>((fract(sin(dot(p, vec3<f32>(127.1, 311.7, 415.57))) * 43758.5453123) * 2.0 - 1.0),
@@ -81,7 +77,9 @@ fn random3D(p: vec3<f32>) -> vec3<f32> {
 }
 
 fn random2D(seed: vec2<f32>) -> vec2<f32> {
-    return hash2D(seed);
+    let rand_2d: vec2<f32> = vec2<f32>(fract(sin(dot(seed, vec2<f32>(127.1, 311.7))) * 43758.5453123) * 2.0 - 1.0,
+                                fract(sin(dot(seed + vec2<f32>(1.0, 1.0), vec2<f32>(127.1, 311.7))) * 43758.5453123) * 2.0 - 1.0);
+    return rand_2d;
 }
 
 fn randomHemisphereDirection(normal: vec3<f32>, rand: vec2<f32>) -> vec3<f32> {
@@ -130,16 +128,16 @@ fn main(@builtin(global_invocation_id) GlobalInvocationID : vec3<u32>) {
     var myRay: Ray;
     myRay.origin = scene.cameraPos;
 
-    let num_samples: f32 = 9.0;
+    let num_samples: f32 = 128.0;
     let width: f32 = sqrt(num_samples);
     let height: f32 = num_samples/width;
-    let each_dist_x: f32 = 1.0/width;
-    let each_dist_y: f32 = 1.0/height;
+    var rand_dist: vec2<f32>;
 
     for(var i: u32 = 0; i < u32(width); i++){
         for(var j: u32 = 0; j < u32(height); j++){
-            let horizontal_coefficient: f32 = (f32(screen_pos.x) + each_dist_x * f32(i) - f32(screen_size.x) / 2) / f32(screen_size.x);
-            let vertical_coefficient: f32 = (f32(screen_pos.y) + each_dist_y * f32(j) - f32(screen_size.y) / 2) / f32(screen_size.x);
+            rand_dist = random2D(vec2<f32>(f32(screen_pos.x), f32(screen_pos.y)) + vec2<f32>(f32(i), f32(j)));
+            let horizontal_coefficient: f32 = (f32(screen_pos.x) + rand_dist.x - f32(screen_size.x) / 2) / f32(screen_size.x);
+            let vertical_coefficient: f32 = (f32(screen_pos.y) + rand_dist.y - f32(screen_size.y) / 2) / f32(screen_size.x);
 
             myRay.direction = normalize(forwards + horizontal_coefficient * right + vertical_coefficient * up);
             pixel_color += rayColor(myRay);
@@ -153,21 +151,20 @@ fn main(@builtin(global_invocation_id) GlobalInvocationID : vec3<u32>) {
 
 fn rayColor(ray: Ray) -> vec3<f32> {
 
-    var color: vec3<f32> = vec3<f32>(1.0, 1.0, 1.0);
+    var color: vec3<f32> = vec3<f32>(0.0, 0.0, 0.0);
     var result: RenderState;
 
     var temp_ray: Ray;
     temp_ray.origin = ray.origin;
     temp_ray.direction = ray.direction;
 
-    let bounces: u32 = 20;//u32(scene.maxBounces);
-    let multiply_ratio = 1.0/f32(bounces);
+    let bounces: u32 = 5;//u32(scene.maxBounces);
     let roughness: f32 = 0.9;
     var count: u32 = 0;
     for(var bounce: u32 = 0; bounce < bounces; bounce++) {
         count += 1;
         result = trace(temp_ray);
-        color *= result.color;
+        color += result.color;
 
         if(!result.hit){
             break;
@@ -178,7 +175,7 @@ fn rayColor(ray: Ray) -> vec3<f32> {
         // temp_ray.direction = roughReflection(temp_ray.direction, result.normal, 1.0, result.uv_coords);
     }
 
-    // color = color/f32(count);
+    color = color/f32(count);
 
     if(result.hit) {
         color = vec3<f32>(0.0, 0.0, 0.0);
@@ -199,7 +196,8 @@ fn trace(ray: Ray) -> RenderState {
     var stackLocation: u32 = 0;
 
     var light: Light;
-    light.intentisty = 1.0;
+    light.ambientIntensity = 0.2;
+    light.diffuseIntensity = 2.0;
     light.direction = scene.cameraForwards;
     light.color = vec3<f32>(1.0, 1.0, 1.0);
 
@@ -269,7 +267,7 @@ fn trace(ray: Ray) -> RenderState {
                         // renderState.color = vec3<f32>(uv_coords.x, uv_coords.y, 0.0);
                         // renderState.color = interpolatedNormal * 0.5 + 0.5;
                         // renderState.color = vec3<f32>(1.0, 0.84, 0.0);
-                        renderState.color = diffuse * baseColor;
+                        renderState.color = light.ambientIntensity * baseColor + light.diffuseIntensity * diffuse * baseColor;
                         // renderState.color = random2D(uv_coords);
                     }
                 }
@@ -286,7 +284,7 @@ fn trace(ray: Ray) -> RenderState {
 
     if(!renderState.hit) {
         // For white sky
-        renderState.color = vec3<f32>(1.0, 1.0, 1.0);
+        renderState.color = vec3<f32>(0.0, 0.0, 0.0);
         // renderState.color = textureSampleLevel(skyMaterial, skySampler, ray.direction, 0.0).xyz;   
     }
 
