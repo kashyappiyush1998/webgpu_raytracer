@@ -15,6 +15,7 @@ export class Scene{
     nodesUsed: number = 0;
     triangleIndices: number[];
     mesh: ObjMesh;
+    numSamples: number = 16;
 
 
     constructor(fileContent: string) {

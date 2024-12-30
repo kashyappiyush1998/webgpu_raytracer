@@ -1,9 +1,3 @@
-struct Sphere {
-    center: vec3<f32>,
-    color: vec3<f32>,
-    radius: f32,
-}
-
 struct Triangle {
     corner_a: vec3<f32>,
     corner_b: vec3<f32>,
@@ -51,6 +45,7 @@ struct Light{
 struct SceneData {
     cameraPos : vec3<f32>,
     cameraForwards : vec3<f32>,
+    numSamples: f32,
     cameraRight : vec3<f32>,
     maxBounces: f32,
     cameraUp : vec3<f32>,
@@ -122,6 +117,35 @@ fn bubbleSortVec3(arr: ptr<function, array<vec3<f32>, 9>>) {
 const epsilon: f32 = 0.00000001;
 
 
+fn random1D(seed: vec3<f32>) -> f32 {
+    return fract(sin(dot(seed, vec3<f32>(12.9898, 78.233, 45.164))) * 43758.5453123);
+}
+
+// Generate random point on hemisphere for Monte Carlo sampling
+fn randomHemispherePoint(normal: vec3<f32>, seed: vec3<f32>) -> vec3<f32> {
+    let u1 = random1D(seed);
+    let u2 = random1D(seed + vec3<f32>(1.0, 0.0, 0.0));
+    
+    let r = sqrt(1.0 - u1 * u1);
+    let phi = 2.0 * 3.14159 * u2;
+    
+    let x = cos(phi) * r;
+    let y = sin(phi) * r;
+    let z = u1;
+    
+    var up: vec3<f32>; 
+    if(abs(normal.z) < 0.999){
+        up = vec3<f32>(0.0, 0.0, 1.0);
+    } 
+    else {
+        up = vec3<f32>(1.0, 0.0, 0.0);
+    }
+    let tangent = normalize(cross(up, normal));
+    let bitangent = cross(normal, tangent);
+    
+    return normalize(tangent * x + bitangent * y + normal * z);
+}
+
 fn random3D(p: vec3<f32>) -> vec3<f32> {
     let rand_3d: vec3<f32> = vec3<f32>((fract(sin(dot(p, vec3<f32>(127.1, 311.7, 415.57))) * 43758.5453123) * 2.0 - 1.0),
                                         (fract(sin(dot(p + vec3<f32>(1.0, 1.0, 1.0), vec3<f32>(127.1, 311.7, 415.57))) * 43758.5453123) * 2.0 - 1.0),
@@ -133,25 +157,6 @@ fn random2D(seed: vec2<f32>) -> vec2<f32> {
     let rand_2d: vec2<f32> = vec2<f32>(fract(sin(dot(seed, vec2<f32>(127.1, 311.7))) * 43758.5453123) * 2.0 - 1.0,
                                 fract(sin(dot(seed + vec2<f32>(1.0, 1.0), vec2<f32>(127.1, 311.7))) * 43758.5453123) * 2.0 - 1.0);
     return rand_2d;
-}
-
-fn randomHemisphereDirection(normal: vec3<f32>, rand: vec2<f32>) -> vec3<f32> {
-    let phi: f32 = 2.0 * 3.14159265359 * rand.x; // Random angle around normal
-    let cosTheta: f32 = sqrt(1.0 - rand.y);      // Bias towards the normal
-    let sinTheta: f32 = sqrt(rand.y);
-
-    let tangent: vec3<f32> = normalize(vec3<f32>(normal.y, normal.z, -normal.x)); // Generate tangent
-    let bitangent: vec3<f32> = cross(normal, tangent);
-
-    return normalize(sinTheta * cos(phi) * tangent +
-                     sinTheta * sin(phi) * bitangent +
-                     cosTheta * normal);
-}
-
-fn roughReflection(incident: vec3<f32>, normal: vec3<f32>, roughness: f32, rand: vec2<f32>) -> vec3<f32> {
-    let perfectReflection: vec3<f32> = reflect(incident, normal);
-    let randomDir: vec3<f32> = randomHemisphereDirection(perfectReflection, rand);
-    return normalize((perfectReflection + randomDir) * roughness);
 }
 
 @group(0) @binding(0) var color_buffer: texture_storage_2d<rgba8unorm, write>;
@@ -181,24 +186,29 @@ fn main(@builtin(global_invocation_id) GlobalInvocationID : vec3<u32>) {
     var myRay: Ray;
     myRay.origin = scene.cameraPos;
 
-    let num_samples: f32 = 16.0;
+    let num_samples: f32 = scene.numSamples;
     let width: f32 = sqrt(num_samples);
     let height: f32 = num_samples/width;
     var rand_dist: vec2<f32>;
     var color_array: array<vec3<f32>, 9>;
 
-    for(var i: u32 = 0; i < u32(width); i++){
-        for(var j: u32 = 0; j < u32(height); j++){
-            rand_dist = random2D(vec2<f32>(f32(screen_pos.x), f32(screen_pos.y)) + vec2<f32>(f32(i), f32(j)));
-            let horizontal_coefficient: f32 = (f32(screen_pos.x) + rand_dist.x - f32(screen_size.x) / 2) / f32(screen_size.x);
-            let vertical_coefficient: f32 = (f32(screen_pos.y) + rand_dist.y - f32(screen_size.y) / 2) / f32(screen_size.x);
+    // for(var i: u32 = 0; i < u32(width); i++){
+    //     for(var j: u32 = 0; j < u32(height); j++){
+    for(var sample: u32 = 0u; sample < u32(scene.numSamples); sample++) {
+        let seed = vec3<f32>(f32(screen_pos.x), f32(screen_pos.y), f32(sample));
+        // Stratified sampling for anti-aliasing
+        let offset = random2D(vec2<f32>(seed.x, seed.y) + vec2<f32>(f32(sample)));
 
-            myRay.direction = normalize(forwards + horizontal_coefficient * right + vertical_coefficient * up);
-            var color: vec3<f32> = rayColor(myRay);
-            pixel_color += color;
-            // color_array[i * u32(width) + j] = color;
-        }
-    } 
+        // rand_dist = random2D(vec2<f32>(f32(screen_pos.x), f32(screen_pos.y)) + vec2<f32>(f32(i), f32(j)));
+        let horizontal_coefficient: f32 = (f32(screen_pos.x) + offset.x - f32(screen_size.x) / 2) / f32(screen_size.x);
+        let vertical_coefficient: f32 = (f32(screen_pos.y) + offset.y - f32(screen_size.y) / 2) / f32(screen_size.x);
+
+        myRay.direction = normalize(forwards + horizontal_coefficient * right + vertical_coefficient * up);
+        var color: vec3<f32> = rayColor(myRay);
+        pixel_color += color;
+        // color_array[i * u32(width) + j] = color;
+    }
+    // } 
 
     // Median filtering
     // bubbleSortVec3(&color_array);
@@ -210,6 +220,7 @@ fn main(@builtin(global_invocation_id) GlobalInvocationID : vec3<u32>) {
 
 fn rayColor(ray: Ray) -> vec3<f32> {
 
+    var throughput: vec3<f32> = vec3<f32>(1.0, 1.0, 1.0);
     var color: vec3<f32> = vec3<f32>(0.0, 0.0, 0.0);
     var result: RenderState;
 
@@ -218,7 +229,7 @@ fn rayColor(ray: Ray) -> vec3<f32> {
     temp_ray.direction = ray.direction;
 
     let bounces: u32 = 5;//u32(scene.maxBounces);
-    let roughness: f32 = 0.7;
+    let roughness: f32 = 0.9;
     var count: u32 = 0;
     for(var bounce: u32 = 0; bounce < bounces; bounce++) {
         count += 1;
@@ -229,8 +240,28 @@ fn rayColor(ray: Ray) -> vec3<f32> {
             break;
         }
 
-        temp_ray.origin = result.position;
-        temp_ray.direction = normalize(reflect(temp_ray.direction, result.normal + random3D(result.normal) * roughness));
+        // Get material properties at hit point
+        let albedo = result.color;
+
+        // Russian Roulette for path termination
+        let rr_prob = max(max(throughput.r, throughput.g), throughput.b);
+        if (random1D(result.position + vec3<f32>(f32(bounce))) > rr_prob && bounce > 3u) {
+            break;
+        }
+        throughput /= rr_prob;
+
+        // Generate new ray direction using hemisphere sampling
+        let new_dir = randomHemispherePoint(result.normal, result.position + vec3<f32>(f32(bounce)));
+
+        // Calculate BRDF and cosine term
+        let cos_theta = max(dot(new_dir, result.normal), 0.0);
+        let brdf = albedo / 3.14159; // Assuming lambertian surface
+
+        // Update throughput
+        throughput *= brdf * cos_theta * 2.0 * 3.14159; // PDF = 1 / (2 * PI)
+
+        temp_ray.origin = result.position + result.normal * 0.001;
+        temp_ray.direction = new_dir;//normalize(reflect(temp_ray.direction, result.normal + random3D(result.normal) * roughness));
         // temp_ray.direction = roughReflection(temp_ray.direction, result.normal, 1.0, result.uv_coords);
     }
 

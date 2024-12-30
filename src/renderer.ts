@@ -60,6 +60,7 @@ export class Renderer {
         this.right_amount = 0;
         this.up_amount = 0;
 
+        this.setupDownloadButton()
         this.inputTexture = new Texture2D();
 
         inputElement.addEventListener("change", async (ev) =>{
@@ -106,17 +107,7 @@ export class Renderer {
         //     "mousemove", 
         //     (event: MouseEvent) => {this.handle_mouse_move(event);}
         // );
-        const buttonDownloadElement: HTMLButtonElement = <HTMLButtonElement> document.getElementById("download_canvas");
-        buttonDownloadElement.addEventListener('click', function(e) {
-            let canvasUrl = canvas.toDataURL();
-            const createEl = document.createElement('a');
-            createEl.href = canvasUrl;
         
-            createEl.download = "frame_render.png";
-        
-            createEl.click();
-            createEl.remove();
-        });
     }
 
     async loadDefaultTexture(){
@@ -428,9 +419,56 @@ export class Renderer {
         });
     }
 
+    private setupDownloadButton() {
+        const buttonDownloadElement = document.getElementById("download_canvas") as HTMLButtonElement;
+        buttonDownloadElement.addEventListener('click', (e) => {
+
+            this.prepareScene(500);
+
+            const commandEncoder : GPUCommandEncoder = this.device.createCommandEncoder();
+
+            const ray_trace_pass : GPUComputePassEncoder = commandEncoder.beginComputePass();
+            ray_trace_pass.setPipeline(this.ray_tracing_pipeline);
+            ray_trace_pass.setBindGroup(0, this.ray_tracing_bind_group);
+            ray_trace_pass.dispatchWorkgroups(
+                Math.floor((this.canvas.width + 7) / 8), 
+                Math.floor((this.canvas.height + 7) / 8), 1);
+            ray_trace_pass.end();
+
+            const textureView : GPUTextureView = this.context.getCurrentTexture().createView();
+            const renderpass : GPURenderPassEncoder = commandEncoder.beginRenderPass({
+                colorAttachments: [{
+                    view: textureView,
+                    clearValue: {r: 0.5, g: 0.0, b: 0.25, a: 1.0},
+                    loadOp: "clear",
+                    storeOp: "store"
+                }]
+            });
+
+
+            renderpass.setPipeline(this.screen_pipeline);
+            renderpass.setBindGroup(0, this.screen_bind_group);
+
+            renderpass.draw(6, 1, 0, 0);
+
+            renderpass.end();
+
+            this.device.queue.submit([commandEncoder.finish()]);
+
+            const canvasUrl = this.canvas.toDataURL();
+            const createEl = document.createElement('a');
+            createEl.href = canvasUrl;
+            createEl.download = "frame_render.png";
+
+            createEl.click();
+            createEl.remove();
+        });
+    }
+
     
 
-    prepareScene() {
+    prepareScene(num_of_samples: number) {
+
         this.scene.update();
         this.scene.move_camera(this.forwards_amount, this.right_amount, this.up_amount);
 
@@ -454,7 +492,7 @@ export class Renderer {
                     sceneData.cameraForward[0],
                     sceneData.cameraForward[1],
                     sceneData.cameraForward[2],
-                    1.0,
+                    num_of_samples,
                     sceneData.cameraRight[0],
                     sceneData.cameraRight[1],
                     sceneData.cameraRight[2],
@@ -534,7 +572,7 @@ export class Renderer {
 
         const startTime = performance.now();
 
-        this.prepareScene();
+        this.prepareScene(4);
 
         const commandEncoder : GPUCommandEncoder = this.device.createCommandEncoder();
 

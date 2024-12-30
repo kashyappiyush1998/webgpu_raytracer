@@ -13,3 +13,5 @@ const renderer = new Renderer(canvas, scene, inputElement, change_every_frame, c
 await renderer.setupDevice();
 await renderer.loadDefaultTexture();
 await renderer.Initialize();
+
+
