@@ -5,6 +5,7 @@ import { Node } from "./node";
 import { vec3 } from "gl-matrix";
 import { ObjMesh } from "./obj_mesh";
 import { GLTFMesh } from "./gltf_mesh";
+import { Light } from "./light";
 
 export class Scene{
 
@@ -16,11 +17,14 @@ export class Scene{
     triangleIndices: number[];
     mesh: ObjMesh;
     numSamples: number = 16;
+    lights: Light[];
+
 
 
     constructor(fileContent: string) {
         this.mesh = new ObjMesh(fileContent);
-        this.camera = new Camera([-3.0, 0.0, 0.0], 0, 0);        
+        this.camera = new Camera([-3.0, 0.0, 0.0], 0, 0);
+        this.lights = [new Light([-5.0, 0.0, 0.0], [1.0, 0.0, 0.0])]
     }
 
     update() {
@@ -54,6 +58,10 @@ export class Scene{
             this.camera.position, this.camera.position, 
             this.camera.up, up_amount
         );
+    }
+
+    rotate_light(light_angle: number) {
+        vec3.rotateZ(this.lights[0].direction, this.lights[0].direction, [0.0, 0.0, 0.0], light_angle)
     }
 
     async make_scene() {

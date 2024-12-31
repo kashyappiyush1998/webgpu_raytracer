@@ -29,6 +29,7 @@ export class Renderer {
     color_buffer_view: GPUTextureView;
     sampler: GPUSampler;
     sceneParameters: GPUBuffer;
+    lightParameters: GPUBuffer;
     triangleBuffer: GPUBuffer;
     nodeBuffer: GPUBuffer;
     triangleIndexBuffer: GPUBuffer;
@@ -46,6 +47,7 @@ export class Renderer {
     forwards_amount: number;
     right_amount: number;
     up_amount: number;
+    light_angle: number;
 
 
     constructor(canvas: HTMLCanvasElement, scene: Scene, inputElement: HTMLInputElement, change_every_frame: HTMLPreElement, change_every_second: HTMLPreElement){
@@ -59,6 +61,7 @@ export class Renderer {
         this.forwards_amount = 0;
         this.right_amount = 0;
         this.up_amount = 0;
+        this.light_angle = 0;
 
         this.setupDownloadButton()
         this.inputTexture = new Texture2D();
@@ -213,6 +216,13 @@ export class Renderer {
                     visibility: GPUShaderStage.COMPUTE,
                     sampler: {}
                 },
+                {
+                    binding: 9,
+                    visibility: GPUShaderStage.COMPUTE,
+                    buffer: {
+                        type: "uniform",
+                    }
+                },
             ]
 
         });
@@ -265,6 +275,13 @@ export class Renderer {
         };
         this.sceneParameters = this.device.createBuffer(
             parameterBufferDescriptor
+        );
+        const lightBufferDescriptor: GPUBufferDescriptor = {
+            size: 48,
+            usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
+        };
+        this.lightParameters = this.device.createBuffer(
+            lightBufferDescriptor
         );
 
         const triangleBufferDescriptor: GPUBufferDescriptor = {
@@ -401,6 +418,12 @@ export class Renderer {
                     binding: 8,
                     resource: this.inputTexture.sampler
                 },
+                {
+                    binding: 9,
+                    resource: {
+                        buffer: this.lightParameters,
+                    }
+                },
             ]
         });
 
@@ -423,7 +446,7 @@ export class Renderer {
         const buttonDownloadElement = document.getElementById("download_canvas") as HTMLButtonElement;
         buttonDownloadElement.addEventListener('click', (e) => {
 
-            this.prepareScene(500);
+            this.prepareScene(256);
 
             const commandEncoder : GPUCommandEncoder = this.device.createCommandEncoder();
 
@@ -471,6 +494,7 @@ export class Renderer {
 
         this.scene.update();
         this.scene.move_camera(this.forwards_amount, this.right_amount, this.up_amount);
+        this.scene.rotate_light(this.light_angle);
 
         const sceneData = {
             cameraPos: this.scene.camera.position,
@@ -488,7 +512,7 @@ export class Renderer {
                     sceneData.cameraPos[0],
                     sceneData.cameraPos[1],
                     sceneData.cameraPos[2],
-                    1.0,
+                    0.2, // ambient Intensity
                     sceneData.cameraForward[0],
                     sceneData.cameraForward[1],
                     sceneData.cameraForward[2],
@@ -503,6 +527,33 @@ export class Renderer {
                     sceneData.triangleCount,
                 ]
             ), 0, 16
+        );
+
+        const lightData = {
+            lightPos: this.scene.lights[0].position,
+            diffuseIntensity: this.scene.lights[0].diffuseIntensity,
+            direction: this.scene.lights[0].direction,
+            color: this.scene.lights[0].color,
+        }
+
+        this.device.queue.writeBuffer(
+            this.lightParameters, 0,
+            new Float32Array(
+                [
+                    lightData.lightPos[0],
+                    lightData.lightPos[1],
+                    lightData.lightPos[2],
+                    lightData.diffuseIntensity,
+                    lightData.direction[0],
+                    lightData.direction[1],
+                    lightData.direction[2],
+                    1.0,
+                    lightData.color[0],
+                    lightData.color[1],
+                    lightData.color[2],
+                    1.0,
+                ]
+            ), 0, 12
         );
 
         const triangleData: Float32Array = new Float32Array(36 * this.scene.triangleCount);
@@ -643,6 +694,12 @@ export class Renderer {
         if (event.code == "KeyZ") {
             this.up_amount = -0.02;
         }
+        if (event.code == "KeyR") {
+            this.light_angle = +0.1;
+        }
+        if (event.code == "KeyL") {
+            this.light_angle = -0.1;
+        }
 
     }
 
@@ -664,6 +721,12 @@ export class Renderer {
         }
         if (event.code == "KeyZ") {
             this.up_amount = 0;
+        }
+        if (event.code == "KeyR") {
+            this.light_angle = 0;
+        }
+        if (event.code == "KeyL") {
+            this.light_angle = 0;
         }
     }
 

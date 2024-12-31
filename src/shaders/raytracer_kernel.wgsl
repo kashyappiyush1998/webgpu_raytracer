@@ -36,14 +36,19 @@ struct Ray {
 }
 
 struct Light{
-    ambientIntensity: f32,
+    position: vec3<f32>,
     diffuseIntensity: f32,
     direction: vec3<f32>,
     color: vec3<f32>,
 }
 
+struct Lights{
+    lights: array<Light>,
+}
+
 struct SceneData {
     cameraPos : vec3<f32>,
+    ambientLightIntensity: f32,
     cameraForwards : vec3<f32>,
     numSamples: f32,
     cameraRight : vec3<f32>,
@@ -59,6 +64,26 @@ struct RenderState {
     position: vec3<f32>,
     normal: vec3<f32>,
     uv_coords: vec2<f32>,
+}
+
+// 3. Adaptive Sampling
+struct PixelState {
+    mean: vec3<f32>,
+    m2: vec3<f32>,
+    variance: vec3<f32>,
+    samples: u32,
+}
+
+fn updatePixelVariance(state: ptr<function, PixelState>, sample: vec3<f32>) {
+    (*state).samples += 1u;
+    let delta = sample - (*state).mean;
+    (*state).mean += delta / f32((*state).samples);
+    let delta2 = sample - (*state).mean;
+    (*state).m2 += delta * delta2;
+    
+    if ((*state).samples > 1u) {
+        (*state).variance = (*state).m2 / f32((*state).samples - 1u);
+    }
 }
 
 fn maxVec3(a: vec3<f32>, b: vec3<f32>) -> vec3<f32> {
@@ -127,6 +152,7 @@ fn randomHemispherePoint(normal: vec3<f32>, seed: vec3<f32>) -> vec3<f32> {
     let u2 = random1D(seed + vec3<f32>(1.0, 0.0, 0.0));
     
     let r = sqrt(1.0 - u1 * u1);
+    // Every direction has equal probability
     let phi = 2.0 * 3.14159 * u2;
     
     let x = cos(phi) * r;
@@ -168,6 +194,7 @@ fn random2D(seed: vec2<f32>) -> vec2<f32> {
 @group(0) @binding(6) var skySampler: sampler;
 @group(0) @binding(7) var texture: texture_2d<f32>; 
 @group(0) @binding(8) var textureSampler: sampler;
+@group(0) @binding(9) var<uniform> light: Light;
 
 @compute @workgroup_size(8,8,1)
 fn main(@builtin(global_invocation_id) GlobalInvocationID : vec3<u32>) {
@@ -192,6 +219,12 @@ fn main(@builtin(global_invocation_id) GlobalInvocationID : vec3<u32>) {
     var rand_dist: vec2<f32>;
     var color_array: array<vec3<f32>, 9>;
 
+    var pixel_state: PixelState;
+    pixel_state.mean = vec3<f32>(0.0);
+    pixel_state.m2 = vec3<f32>(0.0);
+    pixel_state.variance = vec3<f32>(0.0);
+    pixel_state.samples = 0u;
+
     // for(var i: u32 = 0; i < u32(width); i++){
     //     for(var j: u32 = 0; j < u32(height); j++){
     for(var sample: u32 = 0u; sample < u32(scene.numSamples); sample++) {
@@ -205,8 +238,13 @@ fn main(@builtin(global_invocation_id) GlobalInvocationID : vec3<u32>) {
 
         myRay.direction = normalize(forwards + horizontal_coefficient * right + vertical_coefficient * up);
         var color: vec3<f32> = rayColor(myRay);
+        // updatePixelVariance(&pixel_state, color);
         pixel_color += color;
         // color_array[i * u32(width) + j] = color;
+        // Adaptive sampling - break if variance is low enough
+        // if (sample > 2 && max(max(pixel_state.variance.x, pixel_state.variance.y), pixel_state.variance.z) < 0.01) {
+        //     break;
+        // }
     }
     // } 
 
@@ -237,6 +275,7 @@ fn rayColor(ray: Ray) -> vec3<f32> {
         color += result.color;
 
         if(!result.hit){
+            // color += throughput * vec3<f32>(0.5); // Ambient light
             break;
         }
 
@@ -248,6 +287,7 @@ fn rayColor(ray: Ray) -> vec3<f32> {
         if (random1D(result.position + vec3<f32>(f32(bounce))) > rr_prob && bounce > 3u) {
             break;
         }
+
         throughput /= rr_prob;
 
         // Generate new ray direction using hemisphere sampling
@@ -260,14 +300,16 @@ fn rayColor(ray: Ray) -> vec3<f32> {
         // Update throughput
         throughput *= brdf * cos_theta * 2.0 * 3.14159; // PDF = 1 / (2 * PI)
 
-        temp_ray.origin = result.position + result.normal * 0.001;
+        temp_ray.origin = result.position;// + result.normal * 0.001;
         temp_ray.direction = new_dir;//normalize(reflect(temp_ray.direction, result.normal + random3D(result.normal) * roughness));
         // temp_ray.direction = roughReflection(temp_ray.direction, result.normal, 1.0, result.uv_coords);
     }
 
     color = color/f32(count);
+    // throughput = throughput/f32(count);
 
     if(result.hit) {
+        // throughput = vec3<f32>(0.0, 0.0, 0.0);
         color = vec3<f32>(0.0, 0.0, 0.0);
     }
 
@@ -285,11 +327,10 @@ fn trace(ray: Ray) -> RenderState {
     var stack: array<Node, 15>;
     var stackLocation: u32 = 0;
 
-    var light: Light;
-    light.ambientIntensity = 0.2;
-    light.diffuseIntensity = 2.0;
-    light.direction = scene.cameraForwards;
-    light.color = vec3<f32>(1.0, 1.0, 1.0);
+    var light1: Light;
+    light1.diffuseIntensity = light.diffuseIntensity;
+    light1.direction = light.direction;
+    light1.color = light.color;
 
     while(true) {
 
@@ -348,7 +389,7 @@ fn trace(ray: Ray) -> RenderState {
                         var interpolatedNormal: vec3<f32> = normalize(w * tri.normal_a + u * tri.normal_b + v * tri.normal_c);
                         var baseColor: vec3<f32> = textureSampleLevel(texture, textureSampler, uv_coords, 0.0).xyz;
                         // var diffuse: f32 = max(dot(interpolatedNormal, normalize(light.direction)), 0.0);
-                        var diffuse: f32 = max(dot(-1 * interpolatedNormal, normalize(light.direction)), 0.0);
+                        var diffuse: f32 = max(dot(-1 * interpolatedNormal, normalize(light1.direction)), 0.0);
             
                         nearestHit = newRenderState.t;
                         renderState = newRenderState;
@@ -357,7 +398,7 @@ fn trace(ray: Ray) -> RenderState {
                         // renderState.color = vec3<f32>(uv_coords.x, uv_coords.y, 0.0);
                         // renderState.color = interpolatedNormal * 0.5 + 0.5;
                         // renderState.color = vec3<f32>(1.0, 0.84, 0.0);
-                        renderState.color = light.ambientIntensity * baseColor + light.diffuseIntensity * diffuse * baseColor;
+                        renderState.color = light1.diffuseIntensity * diffuse * baseColor;// + scene.ambientLightIntensity * baseColor;
                         // renderState.color = random2D(uv_coords);
                     }
                 }
