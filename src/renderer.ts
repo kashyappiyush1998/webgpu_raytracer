@@ -134,10 +134,14 @@ export class Renderer {
 
         //adapter: wrapper around (physical) GPU.
         //Describes features and limits
-        this.adapter = <GPUAdapter> await navigator.gpu?.requestAdapter();
+        this.adapter = <GPUAdapter> await navigator.gpu?.requestAdapter({
+            powerPreference: "high-performance",
+        });
+        console.log(this.adapter)
         //device: wrapper around GPU functionality
         //Function calls are made through the device
         this.device = <GPUDevice> await this.adapter?.requestDevice();
+        console.log(this.device)
         //context: similar to vulkan instance (or OpenGL context)
         this.context = <GPUCanvasContext> this.canvas.getContext("webgpu");
         this.format = "bgra8unorm";
@@ -220,7 +224,8 @@ export class Renderer {
                     binding: 9,
                     visibility: GPUShaderStage.COMPUTE,
                     buffer: {
-                        type: "uniform",
+                        type: "read-only-storage",
+                        hasDynamicOffset: false,
                     }
                 },
             ]
@@ -277,8 +282,8 @@ export class Renderer {
             parameterBufferDescriptor
         );
         const lightBufferDescriptor: GPUBufferDescriptor = {
-            size: 48,
-            usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
+            size: 48 * this.scene.lights.length,
+            usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
         };
         this.lightParameters = this.device.createBuffer(
             lightBufferDescriptor
@@ -529,31 +534,31 @@ export class Renderer {
             ), 0, 16
         );
 
-        const lightData = {
-            lightPos: this.scene.lights[0].position,
-            diffuseIntensity: this.scene.lights[0].diffuseIntensity,
-            direction: this.scene.lights[0].direction,
-            color: this.scene.lights[0].color,
-        }
+        // const lightData = {
+        //     lightPos: this.scene.lights[0].position,
+        //     diffuseIntensity: this.scene.lights[0].diffuseIntensity,
+        //     direction: this.scene.lights[0].direction,
+        //     color: this.scene.lights[0].color,
+        // }
+
+        const lightData: Float32Array = new Float32Array(12 * this.scene.lights.length);
+        for (let i = 0; i < this.scene.lights.length; i++) {
+            lightData[i * 12 + 0] = this.scene.lights[i].position[0];
+            lightData[i * 12 + 1] = this.scene.lights[i].position[1];
+            lightData[i * 12 + 2] = this.scene.lights[i].position[2];
+            lightData[i * 12 + 3] = this.scene.lights[i].diffuseIntensity;
+            lightData[i * 12 + 4] = this.scene.lights[i].direction[0];
+            lightData[i * 12 + 5] = this.scene.lights[i].direction[1];
+            lightData[i * 12 + 6] = this.scene.lights[i].direction[2];
+            lightData[i * 12 + 7] = 1.0;
+            lightData[i * 12 + 8] = this.scene.lights[i].color[0];
+            lightData[i * 12 + 9] = this.scene.lights[i].color[1];
+            lightData[i * 12 + 10] = this.scene.lights[i].color[2];
+            lightData[i * 12 + 11] = 1.0;
+        };
 
         this.device.queue.writeBuffer(
-            this.lightParameters, 0,
-            new Float32Array(
-                [
-                    lightData.lightPos[0],
-                    lightData.lightPos[1],
-                    lightData.lightPos[2],
-                    lightData.diffuseIntensity,
-                    lightData.direction[0],
-                    lightData.direction[1],
-                    lightData.direction[2],
-                    1.0,
-                    lightData.color[0],
-                    lightData.color[1],
-                    lightData.color[2],
-                    1.0,
-                ]
-            ), 0, 12
+            this.lightParameters, 0, lightData, 0, 12 * this.scene.lights.length
         );
 
         const triangleData: Float32Array = new Float32Array(36 * this.scene.triangleCount);

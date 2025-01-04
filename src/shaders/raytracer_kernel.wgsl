@@ -194,7 +194,7 @@ fn random2D(seed: vec2<f32>) -> vec2<f32> {
 @group(0) @binding(6) var skySampler: sampler;
 @group(0) @binding(7) var texture: texture_2d<f32>; 
 @group(0) @binding(8) var textureSampler: sampler;
-@group(0) @binding(9) var<uniform> light: Light;
+@group(0) @binding(9) var<storage, read> lights: Lights;
 
 @compute @workgroup_size(8,8,1)
 fn main(@builtin(global_invocation_id) GlobalInvocationID : vec3<u32>) {
@@ -327,11 +327,6 @@ fn trace(ray: Ray) -> RenderState {
     var stack: array<Node, 15>;
     var stackLocation: u32 = 0;
 
-    var light1: Light;
-    light1.diffuseIntensity = light.diffuseIntensity;
-    light1.direction = light.direction;
-    light1.color = light.color;
-
     while(true) {
 
         var primitiveCount: u32 = u32(node.primitiveCount);
@@ -389,7 +384,6 @@ fn trace(ray: Ray) -> RenderState {
                         var interpolatedNormal: vec3<f32> = normalize(w * tri.normal_a + u * tri.normal_b + v * tri.normal_c);
                         var baseColor: vec3<f32> = textureSampleLevel(texture, textureSampler, uv_coords, 0.0).xyz;
                         // var diffuse: f32 = max(dot(interpolatedNormal, normalize(light.direction)), 0.0);
-                        var diffuse: f32 = max(dot(-1 * interpolatedNormal, normalize(light1.direction)), 0.0);
             
                         nearestHit = newRenderState.t;
                         renderState = newRenderState;
@@ -398,7 +392,23 @@ fn trace(ray: Ray) -> RenderState {
                         // renderState.color = vec3<f32>(uv_coords.x, uv_coords.y, 0.0);
                         // renderState.color = interpolatedNormal * 0.5 + 0.5;
                         // renderState.color = vec3<f32>(1.0, 0.84, 0.0);
-                        renderState.color = light1.diffuseIntensity * diffuse * baseColor;// + scene.ambientLightIntensity * baseColor;
+                        
+                        for(var lightCount: u32 = 0; lightCount < arrayLength(&lights.lights); lightCount++){
+                            var light: Light;
+                            light.diffuseIntensity = lights.lights[lightCount].diffuseIntensity;
+                            light.direction = lights.lights[lightCount].direction;
+                            light.color = lights.lights[lightCount].color;
+
+                            var diffuse: f32 = max(dot(-1 * interpolatedNormal, normalize(light.direction)), 0.0);
+                            if(lightCount==0){
+                                renderState.color = light.diffuseIntensity * diffuse * baseColor;
+                            }
+                            else {
+                                renderState.color += light.diffuseIntensity * diffuse * baseColor;
+                            }
+                            
+                        }
+                        // + scene.ambientLightIntensity * baseColor;
                         // renderState.color = random2D(uv_coords);
                     }
                 }

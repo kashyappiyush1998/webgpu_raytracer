@@ -9,7 +9,7 @@ export class Light {
 
     constructor(position: vec3, direction: vec3) {
         this.position = position;
-        this.diffuseIntensity = 2.0;
+        this.diffuseIntensity = 0.7;
         this.direction = direction;
         this.color = [1.0, 1.0, 1.0];
     }
