@@ -37,11 +37,11 @@ fn vert_main(@builtin(vertex_index) VertexIndex : u32) -> VertexOutput {
 @fragment
 fn frag_main(@location(0) TexCoord : vec2<f32>) -> @location(0) vec4<f32> {
 
-    // var mostionVector : vec2<f32> = vec2<f32>(0.0, 0.0);
+    var mostionVector : vec2<f32> = vec2<f32>(0.0, 0.0);
     var currentColor : vec4<f32> = textureSample(color_buffer, screen_sampler, TexCoord);
-    // var historyColor : vec4<f32> = textureSample(history_buffer, screen_sampler, TexCoord);
-    // let alpha = 0.9;
-    // var blendedColor : vec4<f32> = mix(historyColor, currentColor, alpha);
+    var historyColor : vec4<f32> = textureSample(history_buffer, screen_sampler, TexCoord);
+    let alpha = 0.9;
+    var blendedColor : vec4<f32> = mix(historyColor, currentColor, alpha);
 
-    return currentColor;
+    return blendedColor;
 }

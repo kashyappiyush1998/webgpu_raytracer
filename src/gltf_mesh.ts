@@ -9,6 +9,7 @@ export class GLTFMesh {
     v: vec3[]
     vt: vec2[]
     vn: vec3[]
+    opacity: number = 0
 
     triangles: Triangle[]
     color: vec3
@@ -48,7 +49,7 @@ export class GLTFMesh {
         const uvs = new Float32Array(processedGLTF.meshes[0].primitives[0].attributes['TEXCOORD_0'].value);
         
         for (var i = 0; i < triangle_count; i++) {
-            var tri: Triangle = new Triangle();
+            var tri: Triangle = new Triangle(this.opacity, 1.0);
             tri.corners.push([positions[i * 3], positions[(i * 3)+ 1], positions[(i * 3) + 2]]);
             tri.corners.push([positions[(i+1) * 3], positions[((i+1) * 3) + 1], positions[((i+1) * 3) + 2]]);
             tri.corners.push([positions[(i+2) * 3], positions[((i+2) * 3) + 1], positions[((i+2) * 3) + 2]]);

@@ -6,9 +6,11 @@ struct Triangle {
     normal_b: vec3<f32>,
     normal_c: vec3<f32>,
     color: vec3<f32>,
+    opacity: f32,
     corner_a_uv: vec2<f32>,
     corner_b_uv: vec2<f32>,
     corner_c_uv: vec2<f32>,
+    refractive_index: f32,
 }
 
 struct ObjectData {
@@ -64,6 +66,8 @@ struct RenderState {
     position: vec3<f32>,
     normal: vec3<f32>,
     uv_coords: vec2<f32>,
+    opacity: f32,
+    refractive_index: f32,
 }
 
 // 3. Adaptive Sampling
@@ -141,6 +145,42 @@ fn bubbleSortVec3(arr: ptr<function, array<vec3<f32>, 9>>) {
 
 const epsilon: f32 = 0.00000001;
 
+fn rotate_vector_around_axis(vector: vec3<f32>, axis: vec3<f32>, theta: f32) -> vec3<f32> {
+    // Normalize the rotation axis
+    let normalized_axis = normalize(axis);
+    
+    // Compute rotation matrix components
+    let cos_theta = cos(theta);
+    let sin_theta = sin(theta);
+    let one_minus_cos = 1.0 - cos_theta;
+    
+    // Components of normalized axis
+    let x = normalized_axis.x;
+    let y = normalized_axis.y;
+    let z = normalized_axis.z;
+    
+    // Create rotation matrix using Rodrigues' rotation formula
+    let rotation_matrix = mat3x3<f32>(
+        vec3<f32>(
+            cos_theta + x * x * one_minus_cos,
+            x * y * one_minus_cos - z * sin_theta,
+            x * z * one_minus_cos + y * sin_theta
+        ),
+        vec3<f32>(
+            y * x * one_minus_cos + z * sin_theta,
+            cos_theta + y * y * one_minus_cos,
+            y * z * one_minus_cos - x * sin_theta
+        ),
+        vec3<f32>(
+            z * x * one_minus_cos - y * sin_theta,
+            z * y * one_minus_cos + x * sin_theta,
+            cos_theta + z * z * one_minus_cos
+        )
+    );
+    
+    // Apply rotation to the vector
+    return rotation_matrix * vector;
+}
 
 fn random1D(seed: vec3<f32>) -> f32 {
     return fract(sin(dot(seed, vec3<f32>(12.9898, 78.233, 45.164))) * 43758.5453123);
@@ -185,7 +225,7 @@ fn random2D(seed: vec2<f32>) -> vec2<f32> {
     return rand_2d;
 }
 
-@group(0) @binding(0) var color_buffer: texture_storage_2d<rgba8unorm, write>;
+@group(0) @binding(0) var color_buffer: texture_storage_2d<rgba16float, write>;
 @group(0) @binding(1) var<uniform> scene: SceneData;
 @group(0) @binding(2) var<storage, read> objects: ObjectData;
 @group(0) @binding(3) var<storage, read> tree: BVH;
@@ -260,7 +300,9 @@ fn rayColor(ray: Ray) -> vec3<f32> {
 
     var throughput: vec3<f32> = vec3<f32>(1.0, 1.0, 1.0);
     var color: vec3<f32> = vec3<f32>(0.0, 0.0, 0.0);
+    var current_refractive_index : f32 = 1.0;
     var result: RenderState;
+    result.refractive_index = 1.0;
 
     var temp_ray: Ray;
     temp_ray.origin = ray.origin;
@@ -301,7 +343,26 @@ fn rayColor(ray: Ray) -> vec3<f32> {
         throughput *= brdf * cos_theta * 2.0 * 3.14159; // PDF = 1 / (2 * PI)
 
         temp_ray.origin = result.position;// + result.normal * 0.001;
-        temp_ray.direction = new_dir;//normalize(reflect(temp_ray.direction, result.normal + random3D(result.normal) * roughness));
+        if(random1D(result.position + vec3<f32>(f32(bounce))) <= result.opacity){
+            temp_ray.direction = new_dir;
+        }
+        else {
+            var refracted_dir: vec3<f32> = (temp_ray.direction);
+
+            if(current_refractive_index != result.refractive_index){
+                var rotation_axis : vec3<f32> = normalize(cross(temp_ray.direction, result.normal));
+                var thetha1: f32 = dot(normalize(temp_ray.direction), normalize(result.normal));
+                thetha1 = acos(thetha1);
+                var new_angle : f32 = asin((current_refractive_index/result.refractive_index) * sin(thetha1));
+                var delta_thetha : f32 = thetha1 - new_angle;
+                refracted_dir = rotate_vector_around_axis(refracted_dir, rotation_axis, radians(delta_thetha));
+            }
+
+            temp_ray.direction = refracted_dir;
+            current_refractive_index = result.refractive_index;
+        }
+        
+        //normalize(reflect(temp_ray.direction, result.normal + random3D(result.normal) * roughness));
         // temp_ray.direction = roughReflection(temp_ray.direction, result.normal, 1.0, result.uv_coords);
     }
 
@@ -321,6 +382,7 @@ fn trace(ray: Ray) -> RenderState {
     var renderState: RenderState;
     renderState.hit = false;
     renderState.color = vec3<f32>(1.0, 1.0, 1.0);
+    renderState.refractive_index = 1.0;
     var nearestHit: f32 = 9999999;
 
     var node: Node = tree.nodes[0];
@@ -382,7 +444,13 @@ fn trace(ray: Ray) -> RenderState {
                         var tri: Triangle = objects.triangles[u32(triangleLookup.primitiveIndices[i + contents])];
                         var uv_coords: vec2<f32> = w * tri.corner_a_uv + u * tri.corner_b_uv + v * tri.corner_c_uv;
                         var interpolatedNormal: vec3<f32> = normalize(w * tri.normal_a + u * tri.normal_b + v * tri.normal_c);
-                        var baseColor: vec3<f32> = textureSampleLevel(texture, textureSampler, uv_coords, 0.0).xyz;
+                        var baseColor: vec3<f32>;
+                        if(tri.color[0]==0.0 && tri.color[1]==0.0 && tri.color[2]==0.0){
+                            baseColor = tri.opacity * textureSampleLevel(texture, textureSampler, uv_coords, 0.0).xyz;
+                        }
+                        else {
+                            baseColor = tri.opacity * tri.color;
+                        }
                         // var diffuse: f32 = max(dot(interpolatedNormal, normalize(light.direction)), 0.0);
             
                         nearestHit = newRenderState.t;
@@ -438,6 +506,7 @@ fn hit_triangle(ray: Ray, tri: Triangle, tMin: f32, tMax: f32, oldRenderState: R
     //right now this hasn't hit anything
     newRenderState.color = oldRenderState.color;
     newRenderState.hit = false;
+    newRenderState.refractive_index = 1.0;
 
     //Direction vectors
     let edge_ab: vec3<f32> = tri.corner_b - tri.corner_a;
@@ -496,6 +565,8 @@ fn hit_triangle(ray: Ray, tri: Triangle, tMin: f32, tMax: f32, oldRenderState: R
     if (t > tMin && t < tMax) {
 
         newRenderState.position = ray.origin + t * ray.direction;
+        newRenderState.opacity = tri.opacity;
+        newRenderState.refractive_index = tri.refractive_index;
         // newRenderState.normal = n;
         // newRenderState.color = tri.color;
         newRenderState.t = t;

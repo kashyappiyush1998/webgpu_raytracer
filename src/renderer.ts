@@ -10,6 +10,8 @@ import { Canvas, FabricImage } from "fabric/*";
 export class Renderer {
 
     canvas: HTMLCanvasElement;
+    width: number;
+    height: number;
     scene: Scene;
     inputObj: File;
     inputTexture: Texture2D;
@@ -27,6 +29,8 @@ export class Renderer {
     //Assets
     color_buffer: GPUTexture;
     color_buffer_view: GPUTextureView;
+    history_buffer: GPUTexture;
+    history_buffer_view: GPUTextureView;
     sampler: GPUSampler;
     sceneParameters: GPUBuffer;
     lightParameters: GPUBuffer;
@@ -52,6 +56,8 @@ export class Renderer {
 
     constructor(canvas: HTMLCanvasElement, scene: Scene, inputElement: HTMLInputElement, change_every_frame: HTMLPreElement, change_every_second: HTMLPreElement){
         this.canvas = canvas;
+        this.width = this.canvas.width,
+        this.height = this.canvas.height,
         this.change_every_frame = change_every_frame;
         this.change_every_second = change_every_second;
         this.count = 0;
@@ -74,7 +80,7 @@ export class Renderer {
                     if(inputFile.name.endsWith(".obj")) {
                         console.log(inputFile)
                         var objText = await inputFile.text();
-                        this.scene = new Scene(objText.toString());
+                        this.scene = new Scene([objText.toString(), "dist/models/ground_plane.obj"]);
                         this.scene.make_scene();
                     }
                     if(inputFile.type.includes("image")) {
@@ -161,7 +167,7 @@ export class Renderer {
                     visibility: GPUShaderStage.COMPUTE,
                     storageTexture: {
                         access: "write-only",
-                        format: "rgba8unorm",
+                        format: "rgba16float",
                         viewDimension: "2d"
                     }
                 },
@@ -243,6 +249,10 @@ export class Renderer {
                     binding: 1,
                     visibility: GPUShaderStage.FRAGMENT,
                     texture: {}
+                },{
+                    binding: 2,
+                    visibility: GPUShaderStage.FRAGMENT,
+                    texture: {}
                 },
             ]
 
@@ -257,12 +267,25 @@ export class Renderer {
                     width: this.canvas.width,
                     height: this.canvas.height,
                 },
-                format: "rgba8unorm",
-                usage: GPUTextureUsage.COPY_DST | GPUTextureUsage.STORAGE_BINDING | GPUTextureUsage.TEXTURE_BINDING
+                format: "rgba16float",
+                usage: GPUTextureUsage.COPY_SRC | GPUTextureUsage.COPY_DST  | GPUTextureUsage.STORAGE_BINDING | GPUTextureUsage.TEXTURE_BINDING
             }
         );
 
         this.color_buffer_view = this.color_buffer.createView();
+
+        this.history_buffer = this.device.createTexture(
+            {
+                size: {
+                    width: this.canvas.width,
+                    height: this.canvas.height,
+                },
+                format: "rgba16float",
+                usage: GPUTextureUsage.COPY_SRC | GPUTextureUsage.COPY_DST | GPUTextureUsage.STORAGE_BINDING | GPUTextureUsage.TEXTURE_BINDING
+            }
+        );
+
+        this.history_buffer_view = this.history_buffer.createView();
 
         const samplerDescriptor: GPUSamplerDescriptor = {
             addressModeU: "repeat",
@@ -306,7 +329,7 @@ export class Renderer {
         );
 
         const triangleIndexBufferDescriptor: GPUBufferDescriptor = {
-            size: 4 * this.scene.triangleCount,
+            size: 4 * this.scene.triangles.length,
             usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
         };
         this.triangleIndexBuffer = this.device.createBuffer(
@@ -442,6 +465,10 @@ export class Renderer {
                 {
                     binding: 1,
                     resource: this.color_buffer_view
+                },
+                {
+                    binding: 2,
+                    resource: this.history_buffer_view
                 }
             ]
         });
@@ -450,8 +477,9 @@ export class Renderer {
     private setupDownloadButton() {
         const buttonDownloadElement = document.getElementById("download_canvas") as HTMLButtonElement;
         buttonDownloadElement.addEventListener('click', (e) => {
-
-            this.prepareScene(256);
+            this.canvas.width = 4000;
+            this.canvas.height = 2600;
+            this.prepareScene(200);
 
             const commandEncoder : GPUCommandEncoder = this.device.createCommandEncoder();
 
@@ -490,6 +518,8 @@ export class Renderer {
 
             createEl.click();
             createEl.remove();
+            this.canvas.width = this.width;
+            this.canvas.height = this.height;
         });
     }
 
@@ -534,13 +564,6 @@ export class Renderer {
             ), 0, 16
         );
 
-        // const lightData = {
-        //     lightPos: this.scene.lights[0].position,
-        //     diffuseIntensity: this.scene.lights[0].diffuseIntensity,
-        //     direction: this.scene.lights[0].direction,
-        //     color: this.scene.lights[0].color,
-        // }
-
         const lightData: Float32Array = new Float32Array(12 * this.scene.lights.length);
         for (let i = 0; i < this.scene.lights.length; i++) {
             lightData[i * 12 + 0] = this.scene.lights[i].position[0];
@@ -561,11 +584,9 @@ export class Renderer {
             this.lightParameters, 0, lightData, 0, 12 * this.scene.lights.length
         );
 
-        const triangleData: Float32Array = new Float32Array(36 * this.scene.triangleCount);
-        // for (let i = 0; i < 24 * this.scene.triangleCount; i++) {
-        //     triangleData[i] = 0.0;
-        // }
-        for (let i = 0; i < this.scene.triangleCount; i++) {
+        const triangleData: Float32Array = new Float32Array(36 * this.scene.triangles.length);
+        console.log(this.scene.triangles.length, this.scene.triangleCount)
+        for (let i = 0; i < this.scene.triangles.length; i++) {
             for (var corner = 0; corner < 3; corner++) {
                 for (var dimension = 0; dimension < 3; dimension++) {
                     triangleData[36*i + 4 * corner + dimension] = 
@@ -583,19 +604,19 @@ export class Renderer {
             for (var channel = 0; channel < 3; channel++) {
                 triangleData[36*i + 24 + channel] = this.scene.triangles[i].color[channel];
             }
-            triangleData[36*i + 27] = 0.0;
+            triangleData[36*i + 27] = this.scene.triangles[i].opacity;
             triangleData[36*i + 28] = this.scene.triangles[i].uv[0][0];
             triangleData[36*i + 29] = this.scene.triangles[i].uv[0][1];
             triangleData[36*i + 30] = this.scene.triangles[i].uv[1][0];
             triangleData[36*i + 31] = this.scene.triangles[i].uv[1][1];
             triangleData[36*i + 32] = this.scene.triangles[i].uv[2][0];
             triangleData[36*i + 33] = this.scene.triangles[i].uv[2][1];
-            triangleData[36*i + 34] = 0.0;
+            triangleData[36*i + 34] = this.scene.triangles[i].refractive_index;
             triangleData[36*i + 35] = 0.0;
         }
 
         this.device.queue.writeBuffer(
-            this.triangleBuffer, 0, triangleData, 0, 36 * this.scene.triangleCount
+            this.triangleBuffer, 0, triangleData, 0, 36 * this.scene.triangles.length
         );
         
         const nodeData: Float32Array = new Float32Array(8 * this.scene.nodesUsed);
@@ -628,9 +649,22 @@ export class Renderer {
 
         const startTime = performance.now();
 
-        this.prepareScene(4);
+        this.prepareScene(1);
 
         const commandEncoder : GPUCommandEncoder = this.device.createCommandEncoder();
+        
+        commandEncoder.copyTextureToTexture(
+            {
+              texture: this.color_buffer,
+            },
+            {
+              texture: this.history_buffer,
+            },
+            {
+              width: this.canvas.width,
+              height: this.canvas.height,
+            },
+        );
 
         const ray_trace_pass : GPUComputePassEncoder = commandEncoder.beginComputePass();
         ray_trace_pass.setPipeline(this.ray_tracing_pipeline);

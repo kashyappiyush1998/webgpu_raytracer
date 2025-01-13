@@ -7,11 +7,15 @@ export class Triangle {
     normal: vec3[]
     color: vec3
     centroid: vec3
+    opacity: number
+    refractive_index: number = 1.0
 
-    constructor() {
+    constructor(opacity: number, refractive_index: number) {
         this.corners = [];
         this.uv = [];
         this.normal = [];
+        this.opacity = opacity;
+        this.refractive_index = refractive_index;
     }
 
     build_from_center_and_offsets(center: vec3, offsets: vec3[], color: vec3) {

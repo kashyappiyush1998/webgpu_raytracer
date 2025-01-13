@@ -4,27 +4,33 @@ import { Texture2D } from "./texture";
 
 export class ObjMesh {
 
+    obj_no: number;
     v: vec3[]
     vt: vec2[]
     vn: vec3[]
+    opacity: number = 1.0
+    refractive_index: number = 1.0
 
     fileContents: string;
     triangles: Triangle[]
     color: vec3
     tex: Texture2D;
 
-    constructor(fileContents: string) {
+    constructor(fileContents: string, obj_no: number) {
 
         this.fileContents = fileContents;
         this.v = [];
         this.vt = [];
         this.vn = [];
+        this.obj_no = obj_no;
 
         this.triangles = [];
     }
 
-    async initialize(color: vec3) {
+    async initialize(color: vec3, opacity: number, refractive_index: number) {
         this.color = color;
+        this.opacity = opacity;
+        this.refractive_index = refractive_index;
         if(this.fileContents.endsWith('.obj')){
             await this.readText(this.fileContents);
         }
@@ -117,7 +123,7 @@ export class ObjMesh {
 
        const triangle_count = vertex_descriptions.length - 3; // accounting also for "f"
        for (var i = 0; i < triangle_count; i++) {
-            var tri: Triangle = new Triangle();
+            var tri: Triangle = new Triangle(this.opacity, this.refractive_index);
             tri.corners.push(this.read_corner_vertex(vertex_descriptions[1], result));
             tri.uv.push(this.read_corner_tex_coord(vertex_descriptions[1], result));
             tri.normal.push(this.read_corner_normal(vertex_descriptions[1], result));

@@ -15,14 +15,19 @@ export class Scene{
     nodes: Node[];
     nodesUsed: number = 0;
     triangleIndices: number[];
-    mesh: ObjMesh;
+    meshes: ObjMesh[] = [];
     numSamples: number = 16;
     lights: Light[];
 
 
 
-    constructor(fileContent: string) {
-        this.mesh = new ObjMesh(fileContent);
+    constructor(fileContent: string[]) {
+        for(let i = 0; i < fileContent.length; i++) {
+            var mesh: ObjMesh = new ObjMesh(fileContent[i], i);
+            if(mesh!=undefined){ 
+                this.meshes.push(mesh);
+            }
+        }
         this.camera = new Camera([-3.0, 0.0, 0.0], 0, 0);
         this.lights = [new Light([-5.0, 0.0, 0.0], [1.0, 0.0, 0.0]),
                         new Light([-5.0, 0.0, 0.0], [1.0, 1.0, 0.0]),
@@ -67,16 +72,27 @@ export class Scene{
     }
 
     async make_scene() {
-        // await this.mesh.initialize([1.0, 1.0, 1.0], "dist/models/dinosaurs_head.obj");
-        await this.mesh.initialize([1.0, 1.0, 1.0]);
-        // await this.mesh.initialize([1.0, 1.0, 1.0], "dist/models/man_head_2.glb");
-
         this.triangles = [];
-        this.mesh.triangles.forEach(
-            (tri) => {
-                this.triangles.push(tri);
+        for(let i=0; i< this.meshes.length; i++) {
+            if(i==0) {
+                await this.meshes[i].initialize([0.0, 0.0, 0.0], 1.0, 1.0);
             }
-        )
+            else if(i==1) {
+                await this.meshes[i].initialize([1.0, 0.0, 0.0], 0.1, 1.33);
+            }
+            else if(i==2) {
+                await this.meshes[i].initialize([0.0, 1.0, 0.0], 0.3, 1.0);
+            }
+            else if(i==3) {
+                await this.meshes[i].initialize([0.0, 0.0, 0.0], 1.0, 1.0);
+            }
+            this.meshes[i].triangles.forEach(
+                (tri) => {
+                    this.triangles.push(tri);
+                }
+            )
+
+        }
 
         this.triangleCount = this.triangles.length;
 
