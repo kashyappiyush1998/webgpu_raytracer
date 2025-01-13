@@ -11,6 +11,7 @@ struct Triangle {
     corner_b_uv: vec2<f32>,
     corner_c_uv: vec2<f32>,
     refractive_index: f32,
+    specularity: f32,
 }
 
 struct ObjectData {
@@ -68,6 +69,7 @@ struct RenderState {
     uv_coords: vec2<f32>,
     opacity: f32,
     refractive_index: f32,
+    specularity : f32,
 }
 
 // 3. Adaptive Sampling
@@ -226,15 +228,16 @@ fn random2D(seed: vec2<f32>) -> vec2<f32> {
 }
 
 @group(0) @binding(0) var color_buffer: texture_storage_2d<rgba16float, write>;
-@group(0) @binding(1) var<uniform> scene: SceneData;
-@group(0) @binding(2) var<storage, read> objects: ObjectData;
-@group(0) @binding(3) var<storage, read> tree: BVH;
-@group(0) @binding(4) var<storage, read> triangleLookup: ObjectIndices;
-@group(0) @binding(5) var skyMaterial: texture_cube<f32>;
-@group(0) @binding(6) var skySampler: sampler;
-@group(0) @binding(7) var texture: texture_2d<f32>; 
-@group(0) @binding(8) var textureSampler: sampler;
-@group(0) @binding(9) var<storage, read> lights: Lights;
+@group(0) @binding(1) var normal_buffer: texture_storage_2d<rgba16float, write>;
+@group(0) @binding(2) var<uniform> scene: SceneData;
+@group(0) @binding(3) var<storage, read> objects: ObjectData;
+@group(0) @binding(4) var<storage, read> tree: BVH;
+@group(0) @binding(5) var<storage, read> triangleLookup: ObjectIndices;
+@group(0) @binding(6) var skyMaterial: texture_cube<f32>;
+@group(0) @binding(7) var skySampler: sampler;
+@group(0) @binding(8) var texture: texture_2d<f32>; 
+@group(0) @binding(9) var textureSampler: sampler;
+@group(0) @binding(10) var<storage, read> lights: Lights;
 
 @compute @workgroup_size(8,8,1)
 fn main(@builtin(global_invocation_id) GlobalInvocationID : vec3<u32>) {
@@ -250,6 +253,7 @@ fn main(@builtin(global_invocation_id) GlobalInvocationID : vec3<u32>) {
     let right: vec3<f32> = scene.cameraRight;
     let up: vec3<f32> = scene.cameraUp;
     var pixel_color : vec3<f32> = vec3<f32>(0.0, 0.0, 0.0);
+    var normal : vec3<f32> = vec3<f32>(0.0, 0.0, 0.0);
     var myRay: Ray;
     myRay.origin = scene.cameraPos;
 
@@ -267,6 +271,7 @@ fn main(@builtin(global_invocation_id) GlobalInvocationID : vec3<u32>) {
 
     // for(var i: u32 = 0; i < u32(width); i++){
     //     for(var j: u32 = 0; j < u32(height); j++){
+    var color_normal: array<vec3<f32>, 2>;
     for(var sample: u32 = 0u; sample < u32(scene.numSamples); sample++) {
         let seed = vec3<f32>(f32(screen_pos.x), f32(screen_pos.y), f32(sample));
         // Stratified sampling for anti-aliasing
@@ -277,9 +282,11 @@ fn main(@builtin(global_invocation_id) GlobalInvocationID : vec3<u32>) {
         let vertical_coefficient: f32 = (f32(screen_pos.y) + offset.y - f32(screen_size.y) / 2) / f32(screen_size.x);
 
         myRay.direction = normalize(forwards + horizontal_coefficient * right + vertical_coefficient * up);
-        var color: vec3<f32> = rayColor(myRay);
+        color_normal = rayColor(myRay);
+
         // updatePixelVariance(&pixel_state, color);
-        pixel_color += color;
+        pixel_color += color_normal[0];
+        normal += color_normal[1];
         // color_array[i * u32(width) + j] = color;
         // Adaptive sampling - break if variance is low enough
         // if (sample > 2 && max(max(pixel_state.variance.x, pixel_state.variance.y), pixel_state.variance.z) < 0.01) {
@@ -292,14 +299,17 @@ fn main(@builtin(global_invocation_id) GlobalInvocationID : vec3<u32>) {
     // bubbleSortVec3(&color_array);
     // pixel_color = color_array[7];
     pixel_color /= num_samples;
+    normal /= num_samples;
 
     textureStore(color_buffer, screen_pos, vec4<f32>(pixel_color, 1.0));
+    textureStore(normal_buffer, screen_pos, vec4<f32>(normal, 1.0));
 }
 
-fn rayColor(ray: Ray) -> vec3<f32> {
+fn rayColor(ray: Ray) -> array<vec3<f32>, 2> {
 
     var throughput: vec3<f32> = vec3<f32>(1.0, 1.0, 1.0);
     var color: vec3<f32> = vec3<f32>(0.0, 0.0, 0.0);
+    var normal: vec3<f32> = vec3<f32>(0.0, 0.0, 0.0);
     var current_refractive_index : f32 = 1.0;
     var result: RenderState;
     result.refractive_index = 1.0;
@@ -315,6 +325,7 @@ fn rayColor(ray: Ray) -> vec3<f32> {
         count += 1;
         result = trace(temp_ray);
         color += result.color;
+        normal += -1 * result.normal;
 
         if(!result.hit){
             // color += throughput * vec3<f32>(0.5); // Ambient light
@@ -367,14 +378,18 @@ fn rayColor(ray: Ray) -> vec3<f32> {
     }
 
     color = color/f32(count);
+    normal = normal/f32(count);
     // throughput = throughput/f32(count);
 
     if(result.hit) {
         // throughput = vec3<f32>(0.0, 0.0, 0.0);
         color = vec3<f32>(0.0, 0.0, 0.0);
     }
+    var return_vars : array<vec3<f32>, 2>;
+    return_vars[0] = color;
+    return_vars[1] = normal;
 
-    return color;
+    return return_vars;
 }
 
 fn trace(ray: Ray) -> RenderState {
@@ -468,11 +483,14 @@ fn trace(ray: Ray) -> RenderState {
                             light.color = lights.lights[lightCount].color;
 
                             var diffuse: f32 = max(dot(-1 * interpolatedNormal, normalize(light.direction)), 0.0);
+
+                            var reflectDir : vec3<f32> = reflect(-1 * light.direction, interpolatedNormal);
+                            var specular: f32 = 0.1 * pow(max(dot(normalize(ray.direction), reflectDir), 0.0), newRenderState.specularity);
                             if(lightCount==0){
-                                renderState.color = light.diffuseIntensity * diffuse * baseColor;
+                                renderState.color = light.diffuseIntensity * diffuse * baseColor + specular * baseColor;
                             }
                             else {
-                                renderState.color += light.diffuseIntensity * diffuse * baseColor;
+                                renderState.color += light.diffuseIntensity * diffuse * baseColor + specular * baseColor;
                             }
                             
                         }
@@ -567,6 +585,7 @@ fn hit_triangle(ray: Ray, tri: Triangle, tMin: f32, tMax: f32, oldRenderState: R
         newRenderState.position = ray.origin + t * ray.direction;
         newRenderState.opacity = tri.opacity;
         newRenderState.refractive_index = tri.refractive_index;
+        newRenderState.specularity = tri.specularity;
         // newRenderState.normal = n;
         // newRenderState.color = tri.color;
         newRenderState.t = t;

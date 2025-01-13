@@ -49,7 +49,7 @@ export class GLTFMesh {
         const uvs = new Float32Array(processedGLTF.meshes[0].primitives[0].attributes['TEXCOORD_0'].value);
         
         for (var i = 0; i < triangle_count; i++) {
-            var tri: Triangle = new Triangle(this.opacity, 1.0);
+            var tri: Triangle = new Triangle(this.opacity, 1.0, 32);
             tri.corners.push([positions[i * 3], positions[(i * 3)+ 1], positions[(i * 3) + 2]]);
             tri.corners.push([positions[(i+1) * 3], positions[((i+1) * 3) + 1], positions[((i+1) * 3) + 2]]);
             tri.corners.push([positions[(i+2) * 3], positions[((i+2) * 3) + 1], positions[((i+2) * 3) + 2]]);

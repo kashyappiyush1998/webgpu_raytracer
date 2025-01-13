@@ -10,6 +10,7 @@ export class ObjMesh {
     vn: vec3[]
     opacity: number = 1.0
     refractive_index: number = 1.0
+    specularity: number = 1.0;
 
     fileContents: string;
     triangles: Triangle[]
@@ -27,10 +28,11 @@ export class ObjMesh {
         this.triangles = [];
     }
 
-    async initialize(color: vec3, opacity: number, refractive_index: number) {
+    async initialize(color: vec3, opacity: number, refractive_index: number, specularity: number) {
         this.color = color;
         this.opacity = opacity;
         this.refractive_index = refractive_index;
+        this.specularity = specularity;
         if(this.fileContents.endsWith('.obj')){
             await this.readText(this.fileContents);
         }
@@ -123,7 +125,7 @@ export class ObjMesh {
 
        const triangle_count = vertex_descriptions.length - 3; // accounting also for "f"
        for (var i = 0; i < triangle_count; i++) {
-            var tri: Triangle = new Triangle(this.opacity, this.refractive_index);
+            var tri: Triangle = new Triangle(this.opacity, this.refractive_index,this.specularity);
             tri.corners.push(this.read_corner_vertex(vertex_descriptions[1], result));
             tri.uv.push(this.read_corner_tex_coord(vertex_descriptions[1], result));
             tri.normal.push(this.read_corner_normal(vertex_descriptions[1], result));

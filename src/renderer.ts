@@ -31,6 +31,8 @@ export class Renderer {
     color_buffer_view: GPUTextureView;
     history_buffer: GPUTexture;
     history_buffer_view: GPUTextureView;
+    normal_buffer: GPUTexture;
+    normal_buffer_view: GPUTextureView;
     sampler: GPUSampler;
     sceneParameters: GPUBuffer;
     lightParameters: GPUBuffer;
@@ -174,16 +176,17 @@ export class Renderer {
                 {
                     binding: 1,
                     visibility: GPUShaderStage.COMPUTE,
-                    buffer: {
-                        type: "uniform",
+                    storageTexture: {
+                        access: "write-only",
+                        format: "rgba16float",
+                        viewDimension: "2d"
                     }
                 },
                 {
                     binding: 2,
                     visibility: GPUShaderStage.COMPUTE,
                     buffer: {
-                        type: "read-only-storage",
-                        hasDynamicOffset: false,
+                        type: "uniform",
                     }
                 },
                 {
@@ -205,29 +208,37 @@ export class Renderer {
                 {
                     binding: 5,
                     visibility: GPUShaderStage.COMPUTE,
-                    texture: {
-                        viewDimension: "cube",
+                    buffer: {
+                        type: "read-only-storage",
+                        hasDynamicOffset: false,
                     }
                 },
                 {
                     binding: 6,
                     visibility: GPUShaderStage.COMPUTE,
-                    sampler: {}
+                    texture: {
+                        viewDimension: "cube",
+                    }
                 },
                 {
                     binding: 7,
+                    visibility: GPUShaderStage.COMPUTE,
+                    sampler: {}
+                },
+                {
+                    binding: 8,
                     visibility: GPUShaderStage.COMPUTE,
                     texture: {
                         viewDimension: "2d",
                     }
                 },
                 {
-                    binding: 8,
+                    binding: 9,
                     visibility: GPUShaderStage.COMPUTE,
                     sampler: {}
                 },
                 {
-                    binding: 9,
+                    binding: 10,
                     visibility: GPUShaderStage.COMPUTE,
                     buffer: {
                         type: "read-only-storage",
@@ -251,6 +262,11 @@ export class Renderer {
                     texture: {}
                 },{
                     binding: 2,
+                    visibility: GPUShaderStage.FRAGMENT,
+                    texture: {}
+                },
+                {
+                    binding: 3,
                     visibility: GPUShaderStage.FRAGMENT,
                     texture: {}
                 },
@@ -286,6 +302,19 @@ export class Renderer {
         );
 
         this.history_buffer_view = this.history_buffer.createView();
+
+        this.normal_buffer = this.device.createTexture(
+            {
+                size: {
+                    width: this.canvas.width,
+                    height: this.canvas.height,
+                },
+                format: "rgba16float",
+                usage: GPUTextureUsage.COPY_SRC | GPUTextureUsage.COPY_DST  | GPUTextureUsage.STORAGE_BINDING | GPUTextureUsage.TEXTURE_BINDING
+            }
+        );
+
+        this.normal_buffer_view = this.normal_buffer.createView();
 
         const samplerDescriptor: GPUSamplerDescriptor = {
             addressModeU: "repeat",
@@ -408,46 +437,50 @@ export class Renderer {
                 },
                 {
                     binding: 1,
+                    resource: this.normal_buffer_view
+                },
+                {
+                    binding: 2,
                     resource: {
                         buffer: this.sceneParameters,
                     }
                 },
                 {
-                    binding: 2,
+                    binding: 3,
                     resource: {
                         buffer: this.triangleBuffer,
                     }
                 },
                 {
-                    binding: 3,
+                    binding: 4,
                     resource: {
                         buffer: this.nodeBuffer,
                     }
                 },
                 {
-                    binding: 4,
+                    binding: 5,
                     resource: {
                         buffer: this.triangleIndexBuffer,
                     }
                 },
                 {
-                    binding: 5,
+                    binding: 6,
                     resource: this.sky_material.view
                 },
                 {
-                    binding: 6,
+                    binding: 7,
                     resource: this.sky_material.sampler
                 },
                 {
-                    binding: 7,
+                    binding: 8,
                     resource: this.inputTexture.view
                 },
                 {
-                    binding: 8,
+                    binding: 9,
                     resource: this.inputTexture.sampler
                 },
                 {
-                    binding: 9,
+                    binding: 10,
                     resource: {
                         buffer: this.lightParameters,
                     }
@@ -469,7 +502,11 @@ export class Renderer {
                 {
                     binding: 2,
                     resource: this.history_buffer_view
-                }
+                },
+                {
+                    binding: 3,
+                    resource: this.normal_buffer_view
+                },
             ]
         });
     }
@@ -612,7 +649,7 @@ export class Renderer {
             triangleData[36*i + 32] = this.scene.triangles[i].uv[2][0];
             triangleData[36*i + 33] = this.scene.triangles[i].uv[2][1];
             triangleData[36*i + 34] = this.scene.triangles[i].refractive_index;
-            triangleData[36*i + 35] = 0.0;
+            triangleData[36*i + 35] = this.scene.triangles[i].specularity;
         }
 
         this.device.queue.writeBuffer(
@@ -649,10 +686,8 @@ export class Renderer {
 
         const startTime = performance.now();
 
-        this.prepareScene(1);
-
         const commandEncoder : GPUCommandEncoder = this.device.createCommandEncoder();
-        
+
         commandEncoder.copyTextureToTexture(
             {
               texture: this.color_buffer,
@@ -665,6 +700,8 @@ export class Renderer {
               height: this.canvas.height,
             },
         );
+
+        this.prepareScene(4);
 
         const ray_trace_pass : GPUComputePassEncoder = commandEncoder.beginComputePass();
         ray_trace_pass.setPipeline(this.ray_tracing_pipeline);
@@ -698,12 +735,9 @@ export class Renderer {
             this.change_every_frame.innerHTML = "Triangle count: " + this.scene.triangles.length.toFixed(0);
             this.change_every_frame.innerHTML += '<br />RenderTime: ' + (performance.now() - startTime).toFixed(5) + ' ms';
         });
-
-
         
         requestAnimationFrame(this.render);
         
-
         const totalTime = performance.now() - startTime;
 
         if(performance.now() - this.passedTime > 1000){

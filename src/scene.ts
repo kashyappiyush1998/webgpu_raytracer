@@ -75,16 +75,16 @@ export class Scene{
         this.triangles = [];
         for(let i=0; i< this.meshes.length; i++) {
             if(i==0) {
-                await this.meshes[i].initialize([0.0, 0.0, 0.0], 1.0, 1.0);
+                await this.meshes[i].initialize([0.0, 0.0, 0.0], 1.0, 1.0, 8);
             }
             else if(i==1) {
-                await this.meshes[i].initialize([1.0, 0.0, 0.0], 0.1, 1.33);
+                await this.meshes[i].initialize([1.0, 0.0, 0.0], 0.1, 1.33, 8);
             }
             else if(i==2) {
-                await this.meshes[i].initialize([0.0, 1.0, 0.0], 0.3, 1.0);
+                await this.meshes[i].initialize([0.0, 1.0, 0.0], 0.3, 1.0, 8);
             }
             else if(i==3) {
-                await this.meshes[i].initialize([0.0, 0.0, 0.0], 1.0, 1.0);
+                await this.meshes[i].initialize([0.0, 0.0, 0.0], 1.0, 1.0, 1);
             }
             this.meshes[i].triangles.forEach(
                 (tri) => {
